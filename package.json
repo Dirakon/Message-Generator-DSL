@@ -1,0 +1,17 @@
+{
+  "name": "tg-new-bot",
+  "version": "0.1.0",
+  "description": "",
+  "main": "output/Main/index.js",
+  "private": false,
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "process": "^0.11.10"
+  },
+  "alias": {
+    "process": false
+  }
+}
