@@ -1,5 +1,5 @@
 {
-  "name": "telegram-news-generator-bot",
+  "name": "telegram-message-generator-bot",
   "version": "0.1.0",
   "description": "",
   "main": "output/Main/index.js",
