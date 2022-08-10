@@ -1,11 +1,12 @@
 module Types where
 
 import Prelude
-
 import Data.Array (head)
+import Data.Generic.Rep (class Generic)
 import Data.List (List)
 import Data.Map (Map, empty)
 import Data.Maybe (Maybe(..))
+import Data.Show.Generic (genericShow)
 import Data.Tuple (Tuple)
 
 type Errors
@@ -17,11 +18,11 @@ type MacroName
 type VariableName
   = String
 
-data Expression 
+data Expression
   = Expression ExpressionType ActorList
 
 data ExpressionType
--- TODO: OneOf (+ConsolidationOf?) are arrayed
+  -- TODO: OneOf (+ConsolidationOf?) are arrayed
   = OneOf Expression Expression
   | ConsolidationOf Expression Expression
   | TupleOf (Array Expression)
@@ -37,48 +38,65 @@ data Assertion
 
 data AssertionType
   = ExpressionsEqual
-  | ExpressionsDifferent  
+  | ExpressionsDifferent
 
 data Signature
   = MacroSignature MacroName
   | VariableSignature (Array VariableName)
 
 -- | List of variables needed to compute an expression
-type ActorList = Array VariableName
+type ActorList
+  = Array VariableName
 
-type EvaluatedExpression = Array StringTuple
-type StringTuple = Array String
+type NonDeterministicEvaluatedExpression
+  = Array DeterministicEvaluatedExpression
 
-type MacroList = Map MacroName Expression
-type VariableList = Map VariableName NonDeterministicVariableDeclaration
-type VariableConstructorList = Map VariableName VariableConstructor
+data DeterministicEvaluatedExpression
+  = TreeExpression EvaluatedExpressionContainer
+  | LeafExpression String
 
+type EvaluatedExpressionContainer
+  = Array DeterministicEvaluatedExpression
+
+derive instance genericDeterministicEvaluatedExpression :: Generic DeterministicEvaluatedExpression _
+
+instance showDeterministicEvaluatedExpression :: Show DeterministicEvaluatedExpression where
+  show s = genericShow s
+
+type MacroList
+  = Map MacroName Expression
+
+type NonDeterministicVariableList
+  = Array NonDeterministicVariableDeclaration
+
+type VariableConstructorList
+  = Map VariableName VariableConstructor
 
 type BotState
-  = { variables :: VariableList
+  = { variables :: DeterministicVariableDeclaration
     , variableConstructors :: VariableConstructorList
     , macros :: MacroList
     , assertions :: Array Assertion
     }
 
-
-type DeterministicVariableDeclaration 
-  = Map VariableName StringTuple
+type DeterministicVariableDeclaration
+  = Map VariableName DeterministicEvaluatedExpression
 
 -- | ASSUMPTION: all deterministic declaration share the same set of variables 
-type NonDeterministicVariableDeclaration 
-  = Array DeterministicVariableDeclaration 
-
+type NonDeterministicVariableDeclaration
+  = Array DeterministicVariableDeclaration
 
 data VariableConstructor
   = VariableConstructor (Array VariableName) Expression
 
-
-
 singletonNonDeterministicDeclaration :: DeterministicVariableDeclaration -> NonDeterministicVariableDeclaration
-singletonNonDeterministicDeclaration dec = [dec]
+singletonNonDeterministicDeclaration dec = [ dec ]
 
-singletonVariableList :: NonDeterministicVariableDeclaration -> VariableList
-singletonVariableList deterministicDecs = case head deterministicDecs of
-  Nothing -> empty
-  Just deterministicDec -> map (\_ -> deterministicDecs) deterministicDec
+-- singletonVariableList :: NonDeterministicVariableDeclaration -> NonDeterministicVariableList
+-- singletonVariableList deterministicDecs = case head deterministicDecs of
+--   Nothing -> empty
+--   Just deterministicDec -> map (\_ -> deterministicDecs) deterministicDec
+evaluatedExpressionToArray :: DeterministicEvaluatedExpression -> Array DeterministicEvaluatedExpression
+evaluatedExpressionToArray (TreeExpression arr) = arr
+
+evaluatedExpressionToArray leafExpression = [ leafExpression ]
