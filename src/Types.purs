@@ -1,13 +1,14 @@
 module Types where
 
 import Prelude
-import Data.Array (head)
+
+import Data.Array (head, zip)
 import Data.Generic.Rep (class Generic)
 import Data.List (List)
-import Data.Map (Map, empty)
+import Data.Map (Map, empty, fromFoldable, singleton)
 import Data.Maybe (Maybe(..))
 import Data.Show.Generic (genericShow)
-import Data.Tuple (Tuple)
+import Data.Tuple (Tuple(..))
 
 type Errors
   = Array String
@@ -100,3 +101,15 @@ evaluatedExpressionToArray :: DeterministicEvaluatedExpression -> Array Determin
 evaluatedExpressionToArray (TreeExpression arr) = arr
 
 evaluatedExpressionToArray leafExpression = [ leafExpression ]
+
+nonDeterministicVariableDeclaration :: Array VariableName -> Array DeterministicEvaluatedExpression -> NonDeterministicVariableDeclaration
+nonDeterministicVariableDeclaration [singleVarName] possibleValues = 
+  map makeOneMap possibleValues
+  where
+    makeOneMap (TreeExpression [oneEl]) = singleton singleVarName oneEl
+    makeOneMap el = singleton singleVarName el
+nonDeterministicVariableDeclaration multiVarList possibleValues = 
+  map makeOneMap possibleValues
+  where
+    makeOneMap (TreeExpression els) = fromFoldable (zip multiVarList els)
+    makeOneMap el = makeOneMap (TreeExpression [el])

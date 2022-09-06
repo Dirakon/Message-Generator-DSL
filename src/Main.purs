@@ -14,7 +14,7 @@ import Format (format)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile, writeTextFile)
 import Parse (parse)
-import Types (DeterministicEvaluatedExpression(..), Expression(..), ExpressionType(..), evaluatedExpressionToArray)
+import Types (DeterministicEvaluatedExpression(..), Expression(..), ExpressionType(..), evaluatedExpressionToArray, nonDeterministicVariableDeclaration)
 
 main :: Effect Unit
 main =
@@ -35,20 +35,27 @@ main =
           textToOutput =
             show
               $ tryEvaluateExpressionForAllVariables
-                  [ [ fromFoldable
-                        [ (Tuple "city" (LeafExpression "city"))
-                        ]
-                    , fromFoldable
-                        [ (Tuple "city" (LeafExpression "city2"))
-                        ] -- TODO: find out why this should be in the same deterministic variable list
-                    ]
+                  [ nonDeterministicVariableDeclaration
+                      [ "person", "pronoun" ]
+                      [ TreeExpression [ LeafExpression "woman", LeafExpression "she" ]
+                      , TreeExpression [ LeafExpression "man", LeafExpression "he" ]
+                      ]
+                  , nonDeterministicVariableDeclaration
+                      [ "city2" ]
+                      [ LeafExpression "piter", LeafExpression "sverdlovsk" ]
                   ]
                   (fromFoldable [])
                   ( Expression
                       ( ConsolidationOf
-                          (Expression (VariableCall "city") [ "city" ])
-                          (Expression (VariableCall "city") [ "city" ])
+                          ( Expression
+                              (ConsolidationOf 
+                                (Expression (VariableCall "person") [ "person" ]) 
+                                (Expression (VariableCall "pronoun") [ "pronoun" ]) 
+                                )
+                                [ "person", "pronoun" ]
+                          )
+                          (Expression (VariableCall "city2") [ "city2" ])
                       )
-                      [ "city" ]
+                      [ "person", "pronoun", "city2" ]
                   )
         writeTextFile UTF8 "out.txt" textToOutput
