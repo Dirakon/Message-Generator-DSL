@@ -1,9 +1,11 @@
 module Main where
 
 import Prelude
+
+import Assertions (applyAssertions)
 import Data.Either (Either(..))
 import Data.List.Lazy (Step(..), step)
-import Data.Map (fromFoldable)
+import Data.Map (empty, fromFoldable)
 import Data.String (joinWith)
 import Data.Tuple (Tuple(..))
 import Data.Validation.Semigroup (V(..))
@@ -14,7 +16,7 @@ import Format (format)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile, writeTextFile)
 import Parse (parse)
-import Types (DeterministicEvaluatedExpression(..), Expression(..), ExpressionType(..), evaluatedExpressionToArray, nonDeterministicVariableDeclaration)
+import Types (Assertion(..), AssertionType(..), DeterministicEvaluatedExpression(..), Expression(..), ExpressionType(..), evaluatedExpressionToArray, nonDeterministicVariableDeclaration)
 
 main :: Effect Unit
 main =
@@ -32,30 +34,55 @@ main =
         --         Nil -> "No message can be generated!"
         --         Cons mes _ -> mes
         let
+          variables =
+            [ nonDeterministicVariableDeclaration
+                [ "person", "pronoun" ]
+                [ TreeExpression [ LeafExpression "woman", LeafExpression "she" ]
+                , TreeExpression [ LeafExpression "man", LeafExpression "he" ]
+                ]
+            , nonDeterministicVariableDeclaration
+                [ "person2", "pronoun2" ]
+                [ TreeExpression [ LeafExpression "woman", LeafExpression "she" ]
+                , TreeExpression [ LeafExpression "man", LeafExpression "he" ]
+                ]
+            , nonDeterministicVariableDeclaration
+                [ "city2" ]
+                [ LeafExpression "piter", LeafExpression "sverdlovsk" ]
+            ]
+        let
+          macros = empty
+        let
+          assertedVariables = applyAssertions
+            [
+              Assertion ExpressionsDifferent
+                (Expression (VariableCall "pronoun") ["pronoun"])
+                (Expression (VariableCall "pronoun2") ["pronoun2"])
+            ]
+            macros
+            variables
+        let
           textToOutput =
             show
               $ tryEvaluateExpressionForAllVariables
-                  [ nonDeterministicVariableDeclaration
-                      [ "person", "pronoun" ]
-                      [ TreeExpression [ LeafExpression "woman", LeafExpression "she" ]
-                      , TreeExpression [ LeafExpression "man", LeafExpression "he" ]
-                      ]
-                  , nonDeterministicVariableDeclaration
-                      [ "city2" ]
-                      [ LeafExpression "piter", LeafExpression "sverdlovsk" ]
-                  ]
-                  (fromFoldable [])
+                  assertedVariables
+                  macros
                   ( Expression
                       ( ConsolidationOf
                           ( Expression
-                              (ConsolidationOf 
-                                (Expression (VariableCall "person") [ "person" ]) 
-                                (Expression (VariableCall "pronoun") [ "pronoun" ]) 
-                                )
-                                [ "person", "pronoun" ]
+                              ( ConsolidationOf
+                                  (Expression (VariableCall "person") [ "person" ])
+                                  (Expression (VariableCall "pronoun") [ "pronoun" ])
+                              )
+                              [ "person", "pronoun" ]
                           )
-                          (Expression (VariableCall "city2") [ "city2" ])
+                          ( Expression
+                              ( ConsolidationOf
+                                  (Expression (VariableCall "person2") [ "person2" ])
+                                  (Expression (VariableCall "pronoun2") [ "pronoun2" ])
+                              )
+                              [ "person2", "pronoun2" ]
+                          )
                       )
-                      [ "person", "pronoun", "city2" ]
+                      [ "person", "pronoun", "person2", "pronoun2" , "city2"]
                   )
         writeTextFile UTF8 "out.txt" textToOutput

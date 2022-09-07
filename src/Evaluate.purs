@@ -2,7 +2,8 @@ module Evaluate where
 
 import Prelude
 import Types
-import Data.Array (catMaybes, concat, cons, length, zip)
+
+import Data.Array (catMaybes, concat, cons, length, nubByEq, zip)
 import Data.Array.NonEmpty (NonEmptyArray, fromArray, uncons)
 import Data.Either (Either(..))
 import Data.Lazy (Lazy)
@@ -30,7 +31,7 @@ executeMacro state macroName = case lookup macroName state.macros of
 
 tryEvaluateExpressionForAllVariables :: NonDeterministicVariableList -> MacroList -> Expression -> NonDeterministicEvaluatedExpression
 tryEvaluateExpressionForAllVariables varDeclarations macros expression =
-  concat $ catMaybes
+  nubByEq eq $ concat $ catMaybes
     $ do
         deterministicVariableList <- allDeterministicLists varDeclarations
         pure $ tryEvaluateExpression deterministicVariableList macros expression

@@ -60,6 +60,7 @@ type EvaluatedExpressionContainer
   = Array DeterministicEvaluatedExpression
 
 derive instance genericDeterministicEvaluatedExpression :: Generic DeterministicEvaluatedExpression _
+derive instance eqDeterministicEvaluatedExpression :: Eq DeterministicEvaluatedExpression
 
 instance showDeterministicEvaluatedExpression :: Show DeterministicEvaluatedExpression where
   show s = genericShow s
