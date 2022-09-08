@@ -2,7 +2,6 @@ module Assertions where
 
 import Prelude
 import Types
-
 import Data.Array (cons, filter, filterA, find, foldM, foldMap, foldl, head, index, partition, uncons)
 import Data.Either (Either(..))
 import Data.List (any, List)
@@ -21,14 +20,12 @@ import Evaluate (tryEvaluateExpression, unifyVariableDeclarations)
 --   in all identity assertionsHold'
 -- | Return true if assertion is true or if it cannot be checked yet.
 -- Throws error if assertion is invalid (non-deterministic, e.g. "$var == $delta | $gamma")
-
 -- TODO: lift errors
 applyAssertions :: Array Assertion -> MacroList -> NonDeterministicVariableList -> NonDeterministicVariableList
 applyAssertions assertions macros variables = foldl (applySingleAssertion macros) variables assertions
 
 applySingleAssertion :: MacroList -> NonDeterministicVariableList -> Assertion -> NonDeterministicVariableList
-applySingleAssertion macros variables (Assertion assertionType expr1@(Expression _ actors1) expr2@(Expression _ actors2)) = 
-  [ assertedUnifiedRelevantVarDecs ] <> otherVarDecs
+applySingleAssertion macros variables (Assertion assertionType expr1@(Expression _ actors1) expr2@(Expression _ actors2)) = [ assertedUnifiedRelevantVarDecs ] <> otherVarDecs
   where
   allActors = actors1 <> actors2
 
@@ -49,21 +46,25 @@ applySingleAssertion macros variables (Assertion assertionType expr1@(Expression
 
   unifiedRelevantVarDecs = case uncons relevantVarDecs of
     Nothing -> []
-    Just{head:initialState, tail: otherRelevantVarDecs} -> foldl unifyVariableDeclarations initialState otherRelevantVarDecs
+    Just { head: initialState, tail: otherRelevantVarDecs } -> foldl unifyVariableDeclarations initialState otherRelevantVarDecs
 
   assertedUnifiedRelevantVarDecs = filter assertionIsTrue unifiedRelevantVarDecs
 
-  assertionIsTrue determinedVariables = fromMaybe false $
-    do
-      evaluatedExpr1 <- tryEvaluateExpression determinedVariables macros expr1
-      evaluatedExpr2 <- tryEvaluateExpression determinedVariables macros expr2
-      deteminedExpr1 <- head evaluatedExpr1
-      deteminedExpr2 <- head evaluatedExpr2
-      pure $ compareEvaluatedExpressions assertionType deteminedExpr1 deteminedExpr2
+  -- TODO: add error on non-deterministic expression comparison
+  assertionIsTrue determinedVariables =
+    fromMaybe false
+      $ do
+          evaluatedExpr1 <- tryEvaluateExpression determinedVariables macros expr1
+          evaluatedExpr2 <- tryEvaluateExpression determinedVariables macros expr2
+          deteminedExpr1 <- head evaluatedExpr1
+          deteminedExpr2 <- head evaluatedExpr2
+          pure $ compareEvaluatedExpressions assertionType deteminedExpr1 deteminedExpr2
 
 compareEvaluatedExpressions :: AssertionType -> DeterministicEvaluatedExpression -> DeterministicEvaluatedExpression -> Boolean
 compareEvaluatedExpressions ExpressionsEqual a b = a == b
+
 compareEvaluatedExpressions ExpressionsDifferent a b = a /= b
+
 -- assertionHolds :: Assertion -> MacroList -> DeterministicVariableDeclaration -> V Errors Boolean
 -- assertionHolds (Assertion assertionType leftSide rightSide) macros variables =
 --   fromMaybe (pure true)

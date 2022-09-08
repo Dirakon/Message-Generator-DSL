@@ -114,3 +114,6 @@ nonDeterministicVariableDeclaration multiVarList possibleValues =
   where
     makeOneMap (TreeExpression els) = fromFoldable (zip multiVarList els)
     makeOneMap el = makeOneMap (TreeExpression [el])
+
+
+data StatementType =  AssertionStatement | MacroStatement | VariableStatement

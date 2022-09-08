@@ -2,7 +2,6 @@ module Evaluate where
 
 import Prelude
 import Types
-
 import Data.Array (catMaybes, concat, cons, length, nubByEq, zip)
 import Data.Array.NonEmpty (NonEmptyArray, fromArray, uncons)
 import Data.Either (Either(..))
@@ -16,18 +15,10 @@ import Data.Tuple.Nested (tuple2)
 import Data.Validation.Semigroup (V(..), invalid)
 import Prim.Boolean (False, True)
 
-evaluate :: BotState -> V Errors NonDeterministicEvaluatedExpression
--- TODO: hugely optimize by choosing just one main branch
-evaluate state = executeMacro state "Main"
-
-executeMacro :: BotState -> MacroName -> V Errors NonDeterministicEvaluatedExpression
-executeMacro state macroName = case lookup macroName state.macros of
-  Nothing -> invalid [ "Called macro cannot be found: " <> macroName ]
-  Just expression -> do
-    -- TODO
-    let
-      evaluatedExpression = tryEvaluateExpression state.variables state.macros expression
-    pure $ []
+evaluateMain :: NonDeterministicVariableList -> MacroList -> NonDeterministicEvaluatedExpression
+evaluateMain vars macros = case lookup "Main" macros of
+  Nothing -> [] --TODO: Error "Cannot find macro 'Main'"
+  Just macroExpression -> tryEvaluateExpressionForAllVariables vars macros macroExpression
 
 tryEvaluateExpressionForAllVariables :: NonDeterministicVariableList -> MacroList -> Expression -> NonDeterministicEvaluatedExpression
 tryEvaluateExpressionForAllVariables varDeclarations macros expression =
