@@ -1,15 +1,24 @@
 module Parse where
 
 import Prelude
-
-import Data.Array (fromFoldable)
+import Data.Array (fromFoldable, length)
+import Data.Array.NonEmpty (toArray)
 import Data.List (List(..))
 import Data.Map (empty)
 import Data.Maybe (Maybe(..))
-import Data.String (joinWith, trim)
-import Data.String.Regex (split)
+import Data.String (contains, joinWith, trim)
+import Data.String.Regex (Regex, match, replace)
+import Data.String.Regex (Regex, split)
+import Data.String.Regex.Flags (noFlags)
+import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (startsWith)
+import Regex (assertionOperationRegex, doubleQuoteBodyGlobal)
 import Types (BotState, Expression(..), ExpressionType, StatementType(..))
+
+match' :: Regex -> String -> Array (Maybe String)
+match' regex string = case match regex string of
+  Nothing -> []
+  Just arr -> toArray arr
 
 -- TODO: Different return
 parse :: String -> BotState
@@ -19,6 +28,12 @@ parse code =
   , variableConstructors: empty
   , variables: empty
   }
+
+hasPatternOutsideQuotes :: String -> Regex -> Boolean
+hasPatternOutsideQuotes text regex = 0 /= (length $ match' regex text)
+
+removeDoubleQuotes :: String -> String
+removeDoubleQuotes text = replace (doubleQuoteBodyGlobal) "" text
 
 extractOneStatment ::
   List String ->
@@ -45,7 +60,7 @@ extractOneStatment (Cons line1 others) = case maybeStatementType of
 
   statementBody = trim $ joinWith "" (fromFoldable (Cons line1 relatedLines))
 
-  isAssertion = false -- TODO: analyze statementBody for '==' or '!='
+  isAssertion = statementBody `hasPatternOutsideQuotes` assertionOperationRegex
 
   maybeStatementType
     | isAssertion = Just AssertionStatement
