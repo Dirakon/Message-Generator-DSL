@@ -1,7 +1,6 @@
 module Types where
 
 import Prelude
-
 import Data.Array (head, zip)
 import Data.Generic.Rep (class Generic)
 import Data.List (List)
@@ -60,6 +59,7 @@ type EvaluatedExpressionContainer
   = Array DeterministicEvaluatedExpression
 
 derive instance genericDeterministicEvaluatedExpression :: Generic DeterministicEvaluatedExpression _
+
 derive instance eqDeterministicEvaluatedExpression :: Eq DeterministicEvaluatedExpression
 
 instance showDeterministicEvaluatedExpression :: Show DeterministicEvaluatedExpression where
@@ -94,26 +94,33 @@ data VariableConstructor
 singletonNonDeterministicDeclaration :: DeterministicVariableDeclaration -> NonDeterministicVariableDeclaration
 singletonNonDeterministicDeclaration dec = [ dec ]
 
--- singletonVariableList :: NonDeterministicVariableDeclaration -> NonDeterministicVariableList
--- singletonVariableList deterministicDecs = case head deterministicDecs of
---   Nothing -> empty
---   Just deterministicDec -> map (\_ -> deterministicDecs) deterministicDec
 evaluatedExpressionToArray :: DeterministicEvaluatedExpression -> Array DeterministicEvaluatedExpression
 evaluatedExpressionToArray (TreeExpression arr) = arr
 
 evaluatedExpressionToArray leafExpression = [ leafExpression ]
 
 nonDeterministicVariableDeclaration :: Array VariableName -> Array DeterministicEvaluatedExpression -> NonDeterministicVariableDeclaration
-nonDeterministicVariableDeclaration [singleVarName] possibleValues = 
-  map makeOneMap possibleValues
+nonDeterministicVariableDeclaration [ singleVarName ] possibleValues = map makeOneMap possibleValues
   where
-    makeOneMap (TreeExpression [oneEl]) = singleton singleVarName oneEl
-    makeOneMap el = singleton singleVarName el
-nonDeterministicVariableDeclaration multiVarList possibleValues = 
-  map makeOneMap possibleValues
+  makeOneMap (TreeExpression [ oneEl ]) = singleton singleVarName oneEl
+
+  makeOneMap el = singleton singleVarName el
+
+nonDeterministicVariableDeclaration multiVarList possibleValues = map makeOneMap possibleValues
   where
-    makeOneMap (TreeExpression els) = fromFoldable (zip multiVarList els)
-    makeOneMap el = makeOneMap (TreeExpression [el])
+  makeOneMap (TreeExpression els) = fromFoldable (zip multiVarList els)
 
+  makeOneMap el = makeOneMap (TreeExpression [ el ])
 
-data StatementType =  AssertionStatement | MacroStatement | VariableStatement
+data Token
+  = VariableToken String -- `$`
+  | MacroToken String -- `#`
+  | LiteralToken String -- `"`
+  | OneOfToken -- `|`
+  | ConsolidationOfToken -- `+`
+  | TupleOpenedToken -- `[`
+  | TupleClosedToken -- `]`
+  | TupleNextItemToken -- `,`
+  | AssertionEqualToken -- `==`
+  | AssertionDifferentToken -- `!=`
+  | AssigmentToken -- `=`

@@ -64,25 +64,3 @@ compareEvaluatedExpressions :: AssertionType -> DeterministicEvaluatedExpression
 compareEvaluatedExpressions ExpressionsEqual a b = a == b
 
 compareEvaluatedExpressions ExpressionsDifferent a b = a /= b
-
--- assertionHolds :: Assertion -> MacroList -> DeterministicVariableDeclaration -> V Errors Boolean
--- assertionHolds (Assertion assertionType leftSide rightSide) macros variables =
---   fromMaybe (pure true)
---     $ ado
---         evaluatedLeft <- tryEvaluateExpression singletonVariableList' macros leftSide
---         evaluatedRight <- tryEvaluateExpression singletonVariableList' macros rightSide
---         in case [ evaluatedLeft, evaluatedRight ] of
---          [ [ evaluatedTuple1 ], [ evaluatedTuple2 ] ] -> pure $ compareEvaluatedTuples assertionType evaluatedTuple1 evaluatedTuple2
---          _ -> invalid [ "assertions cannot be non-deterministic" ]
---   where
---   singletonVariableList' = singletonVariableList (singletonNonDeterministicDeclaration variables)
--- -- assertionDefined :: Assertion -> BotState -> Boolean
--- -- assertionDefined (Assertion _ conceredVariables _ _) state = all (\variable -> variableDefined variable state) conceredVariables
--- filterVariableDeclaration :: MacroList -> NonDeterministicVariableDeclaration -> Assertion -> V Errors NonDeterministicVariableDeclaration
--- filterVariableDeclaration macros varDeclarations assertion = ado
---   filteredDeclarations <- filterA assertionHolds' varDeclarations
---   in filteredDeclarations
---     where
---     assertionHolds' :: DeterministicVariableDeclaration -> V Errors Boolean
---     assertionHolds' declaration 
---       = assertionHolds assertion macros declaration
