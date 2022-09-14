@@ -112,6 +112,8 @@ nonDeterministicVariableDeclaration multiVarList possibleValues = map makeOneMap
 
   makeOneMap el = makeOneMap (TreeExpression [ el ])
 
+data Statement = AssertionStatement Assertion | AssigmentStatement Assigment
+
 data Token
   = VariableToken String -- `$`
   | MacroToken String -- `#`

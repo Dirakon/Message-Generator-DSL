@@ -16,7 +16,7 @@ import Data.String.Regex.Flags (noFlags)
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (startsWith)
 import Regex (assertionOperationRegex, doubleQuoteBodyGlobal)
-import Types (BotState, Expression(..), ExpressionType(..), Token(..))
+import Types (Assertion(..), AssertionType, Assigment(..), BotState, Expression(..), ExpressionType(..), Signature, Statement(..), Token(..))
 
 match' :: Regex -> String -> Array (Maybe String)
 match' regex string = case match regex string of
@@ -38,36 +38,36 @@ hasPatternOutsideQuotes text regex = 0 /= (length $ match' regex text)
 removeDoubleQuotes :: String -> String
 removeDoubleQuotes text = replace (doubleQuoteBodyGlobal) "" text
 
-extractOneExpression ::
+extractOneStatement ::
   List String ->
   Maybe
-    { expression :: Expression
+    { statement :: Statement
     , otherLines :: List String
     }
-extractOneExpression Nil = Nothing
+extractOneStatement Nil = Nothing
 
-extractOneExpression (Cons line1 others) = case parsedExpression of
-  Just expression -> Just { expression, otherLines }
+extractOneStatement (line1 : others) = case parsedStatement of
+  Just statement -> Just { statement, otherLines }
   Nothing -> Nothing
   where
   analyzeLines Nil = { relatedLines: Nil, otherLines: Nil }
 
-  analyzeLines (Cons curLine xs)
-    | startsWith "\t" curLine = { relatedLines: (Cons curLine relatedLines'), otherLines: otherLines' }
+  analyzeLines (curLine : xs)
+    | startsWith "\t" curLine = { relatedLines: (curLine : relatedLines'), otherLines: otherLines' }
       where
       { relatedLines: relatedLines', otherLines: otherLines' } = analyzeLines xs
-    | otherwise = { relatedLines: Nil, otherLines: (Cons curLine xs) }
+    | otherwise = { relatedLines: Nil, otherLines: (curLine : xs) }
 
   { relatedLines, otherLines } = analyzeLines others
 
-  statementBody = trim $ joinWith "" (fromFoldable (Cons line1 relatedLines))
+  statementBody = trim $ joinWith "" (fromFoldable (line1 : relatedLines))
 
-  parsedExpression = tokensToExpression $ tokenize (toUnfoldable $ toCharArray statementBody)
+  parsedStatement = (tokensToStatement <<< tokenize <<< toUnfoldable <<< toCharArray) statementBody
 
 tokenize :: List Char -> List Token
 tokenize chars = case extractOneToken chars of
   Nothing -> Nil
-  Just { extractedToken, otherChars } -> (Cons extractedToken (tokenize otherChars))
+  Just { extractedToken, otherChars } -> extractedToken : (tokenize otherChars)
 
 naturalTokenSpliters :: Array Char
 naturalTokenSpliters = [ '\n', ' ', '\t' ]
@@ -77,7 +77,7 @@ allTokenSplitters = naturalTokenSpliters <> [ '[', ']', ',', '|', '+', '!', '=' 
 
 extractOneToken :: List Char -> Maybe { extractedToken :: Token, otherChars :: List Char }
 extractOneToken chars = case chars of
-  Nil -> Nothing
+  Nil -> Nothing -- Nothing is the correct behaviour: no tokens were found
   '[' : xs -> finish TupleOpenedToken xs
   ']' : xs -> finish TupleClosedToken xs
   ',' : xs -> finish TupleNextItemToken xs
@@ -94,8 +94,8 @@ extractOneToken chars = case chars of
   finish extractedToken otherChars = Just { otherChars, extractedToken }
 
   finishWithOccuranceReader occuranceFunc xs wrapperFunc = case readUntilFirstOccurance xs occuranceFunc of
-    Nothing -> Nothing
-    Just { readData, unreadData } -> finish (wrapperFunc readData) unreadData
+    Nothing -> Nothing -- TODO: error, occurance function could not find the matching character
+    Just { readData, unreadData } -> finish (wrapperFunc (fromCharArray $ fromFoldable readData)) unreadData
 
   tokenSplitterIsMet Nil = Just { moveRightAmount: 0 }
 
@@ -111,27 +111,53 @@ extractOneToken chars = case chars of
 
   removeLastChar = slice 0 (-1)
 
-readUntilFirstOccurance :: List Char -> (List Char -> Maybe { moveRightAmount :: Int }) -> Maybe { readData :: String, unreadData :: List Char }
-readUntilFirstOccurance chars occuranceFunc = case occuranceFunc chars of
+readUntilFirstOccurance :: forall a. List a -> (List a -> Maybe { moveRightAmount :: Int }) -> Maybe { readData :: List a, unreadData :: List a }
+readUntilFirstOccurance elements occuranceFunc = case occuranceFunc elements of
   Just { moveRightAmount } -> Just recursiveResults
     where
-    recursiveResults = tryGrabCharacters chars moveRightAmount
-  Nothing -> case chars of
-    Nil -> Nothing
-    readChar : unreadChars -> recursiveResults
+    recursiveResults = tryGrabElements elements moveRightAmount
+  Nothing -> case elements of
+    Nil -> Nothing -- TODO: error, occurance function could not find the matching character
+    readChar : unreadElements -> recursiveResults
       where
-      recursiveResults = case readUntilFirstOccurance unreadChars occuranceFunc of
-        Nothing -> Nothing
-        Just { readData, unreadData } -> Just { readData: fromCharArray [ readChar ] <> readData, unreadData }
+      recursiveResults = case readUntilFirstOccurance unreadElements occuranceFunc of
+        Nothing -> Nothing -- TODO: error, occurance function could not find the matching character
+        Just { readData, unreadData } -> Just { readData: readChar : readData, unreadData }
 
-tryGrabCharacters :: List Char -> Int -> { readData :: String, unreadData :: List Char }
-tryGrabCharacters = tryGrabCharacters' ""
+tryGrabElements :: forall a. List a -> Int -> { readData :: List a, unreadData :: List a }
+tryGrabElements = tryGrabElements' Nil
   where
-  tryGrabCharacters' readData unreadData 0 = { readData, unreadData }
+  tryGrabElements' :: List a -> List a -> Int -> { readData :: List a, unreadData :: List a }
+  tryGrabElements' readData unreadData 0 = { readData, unreadData }
 
-  tryGrabCharacters' readData Nil _ = { readData, unreadData: Nil }
+  tryGrabElements' readData Nil _ = { readData, unreadData: Nil }
 
-  tryGrabCharacters' readData (char : xs) n = tryGrabCharacters' (readData <> fromCharArray [ char ]) xs (n - 1)
+  tryGrabElements' readData (char : xs) n = tryGrabElements' (readData <> (char : Nil)) xs (n - 1)
 
-tokensToExpression :: List Token -> Maybe Expression
-tokensToExpression l = Nothing
+tokensToStatement :: List Token -> Maybe Statement
+tokensToStatement l = case assertionAnalysis of
+  Just assertionInfo -> map AssertionStatement (parseAssertion assertionInfo)
+  Nothing -> case assigmentAnalysis of
+    Just assigmentInfo -> map AssigmentStatement (parseAssigment assigmentInfo)
+    Nothing -> Nothing -- TODO: error, unknown type of expression
+  where
+  assertionAnalysis :: Maybe { preAssertion :: List Token, postAssertion :: List Token, assertionType :: AssertionType }
+  assertionAnalysis = Nothing -- TODO
+
+  assigmentAnalysis :: Maybe { preAssigment :: List Token, postAssigment :: List Token }
+  assigmentAnalysis = Nothing -- TODO
+
+parseAssertion :: { preAssertion :: List Token, postAssertion :: List Token, assertionType :: AssertionType } -> Maybe Assertion
+parseAssertion { preAssertion, postAssertion, assertionType } = ado
+  expr1 <- parseExpression preAssertion
+  expr2 <- parseExpression postAssertion
+  in (Assertion assertionType expr1 expr2)
+
+parseAssigment :: { preAssigment :: List Token, postAssigment :: List Token } -> Maybe Assigment
+parseAssigment { preAssigment, postAssigment } = Nothing -- TODO
+
+parseExpression :: List Token -> Maybe Expression
+parseExpression tokens = Nothing
+
+parseSignature :: List Token -> Maybe Signature
+parseSignature _ = Nothing
