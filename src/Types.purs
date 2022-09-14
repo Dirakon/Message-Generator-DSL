@@ -120,9 +120,13 @@ data Token
   | LiteralToken String -- `"`
   | OneOfToken -- `|`
   | ConsolidationOfToken -- `+`
+  | BraceOpenedToken -- '('
+  | BraceClosedToken -- `)`
   | TupleOpenedToken -- `[`
   | TupleClosedToken -- `]`
   | TupleNextItemToken -- `,`
   | AssertionEqualToken -- `==`
   | AssertionDifferentToken -- `!=`
   | AssigmentToken -- `=`
+
+derive instance eqToken :: Eq Token

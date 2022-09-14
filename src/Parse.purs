@@ -1,10 +1,11 @@
 module Parse where
 
 import Prelude
+
 import Data.Array (elem, fromFoldable, length, toUnfoldable)
-import Data.Array.NonEmpty (toArray)
-import Data.List (List(..))
+import Data.Array.NonEmpty (NonEmptyArray, toArray)
 import Data.List (List(..), (:))
+import Data.List (List(..), filter)
 import Data.List.Types (List(..))
 import Data.Map (empty)
 import Data.Maybe (Maybe(..))
@@ -16,7 +17,8 @@ import Data.String.Regex.Flags (noFlags)
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (startsWith)
 import Regex (assertionOperationRegex, doubleQuoteBodyGlobal)
-import Types (Assertion(..), AssertionType, Assigment(..), BotState, Expression(..), ExpressionType(..), Signature, Statement(..), Token(..))
+import Tokenization (readUntilFirstOccurance, readUntilFirstOccuranceWithState, tokenize)
+import Types (Assertion(..), AssertionType(..), Assigment(..), BotState, Expression(..), ExpressionType(..), Signature(..), Statement(..), Token(..))
 
 match' :: Regex -> String -> Array (Maybe String)
 match' regex string = case match regex string of
@@ -64,100 +66,129 @@ extractOneStatement (line1 : others) = case parsedStatement of
 
   parsedStatement = (tokensToStatement <<< tokenize <<< toUnfoldable <<< toCharArray) statementBody
 
-tokenize :: List Char -> List Token
-tokenize chars = case extractOneToken chars of
-  Nothing -> Nil
-  Just { extractedToken, otherChars } -> extractedToken : (tokenize otherChars)
-
-naturalTokenSpliters :: Array Char
-naturalTokenSpliters = [ '\n', ' ', '\t' ]
-
-allTokenSplitters :: Array Char
-allTokenSplitters = naturalTokenSpliters <> [ '[', ']', ',', '|', '+', '!', '=' ]
-
-extractOneToken :: List Char -> Maybe { extractedToken :: Token, otherChars :: List Char }
-extractOneToken chars = case chars of
-  Nil -> Nothing -- Nothing is the correct behaviour: no tokens were found
-  '[' : xs -> finish TupleOpenedToken xs
-  ']' : xs -> finish TupleClosedToken xs
-  ',' : xs -> finish TupleNextItemToken xs
-  '|' : xs -> finish OneOfToken xs
-  '+' : xs -> finish ConsolidationOfToken xs
-  '!' : '=' : xs -> finish AssertionDifferentToken xs
-  '=' : '=' : xs -> finish AssertionEqualToken xs
-  '=' : xs -> finish AssigmentToken xs
-  '$' : xs -> finishWithOccuranceReader tokenSplitterIsMet xs (VariableToken)
-  '#' : xs -> finishWithOccuranceReader tokenSplitterIsMet xs (MacroToken)
-  '"' : xs -> finishWithOccuranceReader unslashedQuoteIsMet xs (LiteralToken <<< removeLastChar)
-  char : xs -> if char `elem` naturalTokenSpliters then extractOneToken xs else Nothing -- TODO: error "unknown token beginning"
-  where
-  finish extractedToken otherChars = Just { otherChars, extractedToken }
-
-  finishWithOccuranceReader occuranceFunc xs wrapperFunc = case readUntilFirstOccurance xs occuranceFunc of
-    Nothing -> Nothing -- TODO: error, occurance function could not find the matching character
-    Just { readData, unreadData } -> finish (wrapperFunc (fromCharArray $ fromFoldable readData)) unreadData
-
-  tokenSplitterIsMet Nil = Just { moveRightAmount: 0 }
-
-  tokenSplitterIsMet (char : _) = if char `elem` allTokenSplitters then Just { moveRightAmount: 0 } else Nothing
-
-  unslashedQuoteIsMet ('\\' : '"' : _) = Nothing
-
-  unslashedQuoteIsMet ('"' : _) = Just { moveRightAmount: 1 }
-
-  unslashedQuoteIsMet (_ : '"' : _) = Just { moveRightAmount: 2 }
-
-  unslashedQuoteIsMet _ = Nothing
-
-  removeLastChar = slice 0 (-1)
-
-readUntilFirstOccurance :: forall a. List a -> (List a -> Maybe { moveRightAmount :: Int }) -> Maybe { readData :: List a, unreadData :: List a }
-readUntilFirstOccurance elements occuranceFunc = case occuranceFunc elements of
-  Just { moveRightAmount } -> Just recursiveResults
-    where
-    recursiveResults = tryGrabElements elements moveRightAmount
-  Nothing -> case elements of
-    Nil -> Nothing -- TODO: error, occurance function could not find the matching character
-    readChar : unreadElements -> recursiveResults
-      where
-      recursiveResults = case readUntilFirstOccurance unreadElements occuranceFunc of
-        Nothing -> Nothing -- TODO: error, occurance function could not find the matching character
-        Just { readData, unreadData } -> Just { readData: readChar : readData, unreadData }
-
-tryGrabElements :: forall a. List a -> Int -> { readData :: List a, unreadData :: List a }
-tryGrabElements = tryGrabElements' Nil
-  where
-  tryGrabElements' :: List a -> List a -> Int -> { readData :: List a, unreadData :: List a }
-  tryGrabElements' readData unreadData 0 = { readData, unreadData }
-
-  tryGrabElements' readData Nil _ = { readData, unreadData: Nil }
-
-  tryGrabElements' readData (char : xs) n = tryGrabElements' (readData <> (char : Nil)) xs (n - 1)
-
 tokensToStatement :: List Token -> Maybe Statement
-tokensToStatement l = case assertionAnalysis of
+tokensToStatement tokens = case assertionAnalysis of
   Just assertionInfo -> map AssertionStatement (parseAssertion assertionInfo)
   Nothing -> case assigmentAnalysis of
     Just assigmentInfo -> map AssigmentStatement (parseAssigment assigmentInfo)
     Nothing -> Nothing -- TODO: error, unknown type of expression
   where
   assertionAnalysis :: Maybe { preAssertion :: List Token, postAssertion :: List Token, assertionType :: AssertionType }
-  assertionAnalysis = Nothing -- TODO
+  assertionAnalysis = case tokens `splitByToken` AssertionEqualToken of
+    Just x -> Just (toRightFormat x ExpressionsEqual)
+    Nothing -> case tokens `splitByToken` AssertionDifferentToken of
+      Just x -> Just (toRightFormat x ExpressionsDifferent)
+      Nothing -> Nothing
+    where
+    toRightFormat { pre, post } assertionType = { preAssertion: pre, postAssertion: post, assertionType }
 
   assigmentAnalysis :: Maybe { preAssigment :: List Token, postAssigment :: List Token }
-  assigmentAnalysis = Nothing -- TODO
+  assigmentAnalysis = map toRightFormat $ tokens `splitByToken` AssigmentToken
+    where
+    toRightFormat { pre, post } = { preAssigment: pre, postAssigment: post }
+
+splitByToken :: List Token -> Token -> Maybe { pre :: List Token, post :: List Token }
+splitByToken tokens tokenSplitter = map toRightFormat $ readUntilFirstOccurance tokens tokenSplitterIsMet
+  where
+  toRightFormat { readData, unreadData } = { pre: filter (_ /= tokenSplitter) readData, post: unreadData }
+
+  tokenSplitterIsMet Nil = Nothing
+
+  tokenSplitterIsMet (curToken : xs)
+    | tokenSplitter == curToken = Just { moveRightAmount: 1 }
+    | otherwise = Nothing
 
 parseAssertion :: { preAssertion :: List Token, postAssertion :: List Token, assertionType :: AssertionType } -> Maybe Assertion
 parseAssertion { preAssertion, postAssertion, assertionType } = ado
-  expr1 <- parseExpression preAssertion
-  expr2 <- parseExpression postAssertion
+  expr1 <- parseExpression Nothing preAssertion
+  expr2 <- parseExpression Nothing postAssertion
   in (Assertion assertionType expr1 expr2)
 
 parseAssigment :: { preAssigment :: List Token, postAssigment :: List Token } -> Maybe Assigment
-parseAssigment { preAssigment, postAssigment } = Nothing -- TODO
+parseAssigment { preAssigment, postAssigment } = ado
+  signature <- parseSignature preAssigment
+  expr <- parseExpression Nothing postAssigment
+  in (Assigment signature expr)
 
-parseExpression :: List Token -> Maybe Expression
-parseExpression tokens = Nothing
+parseExpression :: Maybe Expression -> List Token -> Maybe Expression
+parseExpression _ (TupleOpenedToken : xs) = Nothing -- TODO
+
+parseExpression (Just operand1) (OneOfToken : xs) = Nothing
+
+parseExpression _ _ = Nothing
+
+-- TODO: add ALL actors post-factum (impossible to do with current arguments in the process)
+extractOneExpression :: List Token -> Maybe { extractedExpression :: Expression, otherTokens :: List Token }
+extractOneExpression ((LiteralToken literalValue) : otherTokens) = tryFindBinaryExpression constructedLiteral otherTokens
+  where
+  constructedLiteral = Expression (Literal literalValue) []
+
+extractOneExpression ((VariableToken variableName) : otherTokens) =  tryFindBinaryExpression constructedVarialeCall otherTokens
+  where
+  constructedVarialeCall = Expression (VariableCall variableName) []
+
+extractOneExpression ((MacroToken macroName) : otherTokens) = tryFindBinaryExpression constructedMacroCall otherTokens
+  where
+  constructedMacroCall = Expression (MacroCall macroName) []
+
+extractOneExpression (TupleOpenedToken : otherTokens) = process otherTokens []
+  where
+  process :: List Token -> Array Expression -> Maybe { extractedExpression :: Expression, otherTokens :: List Token }
+  process (TupleClosedToken : otherTokens) alreadyExtractedOnes = Just { extractedExpression, otherTokens }
+    where
+    extractedExpression = Expression (TupleOf alreadyExtractedOnes) []
+
+  process (TupleNextItemToken : otherTokens) alreadyExtractedOnes = process otherTokens alreadyExtractedOnes
+
+  process Nil _ = Nothing -- TODO: tuple not closed error
+
+  process something alreadyExtractedOnes = Nothing --TODO! ado
+
+-- map toRightFormat $ extractOneExpression something
+-- where
+-- toRightFormat { extractedExpression, otherTokens } = process otherTokens ([ extractedExpression ] <> alreadyExtractedOnes)
+extractOneExpression Nil = Nothing
+
+extractOneExpression _ = Nothing -- TODO: error, unexpected token
+
+tryFindBinaryExpression :: Expression -> List Token -> Maybe { extractedExpression :: Expression, otherTokens :: List Token }
+tryFindBinaryExpression expr1 Nil = Just { extractedExpression: expr1, otherTokens: Nil }
+
+tryFindBinaryExpression expr1 (OneOfToken : xs) = ado
+  { extractedExpression: expr2, otherTokens } <- extractOneExpression xs
+  in { extractedExpression: Expression (OneOf expr1 expr2) [], otherTokens }
+
+tryFindBinaryExpression expr1 (ConsolidationOfToken : xs) = ado
+  { extractedExpression: expr2, otherTokens } <- extractOneExpression xs
+  in { extractedExpression: Expression (ConsolidationOf expr1 expr2) [], otherTokens }
+
+tryFindBinaryExpression expr1 _ = Nothing -- TODO: error, unexpected token
 
 parseSignature :: List Token -> Maybe Signature
+parseSignature (TupleOpenedToken : xs) = toSignature xs []
+  where
+  toSignature (Nil) readyArray = Nothing -- TODO: error, incomplete variable tuple assigment (can't find closing bracket)
+
+  toSignature (TupleClosedToken : Nil) readyArray = Just $ VariableSignature readyArray
+
+  toSignature ((VariableToken varName) : xs) readyArray = toSignature xs (readyArray <> [ varName ])
+
+  toSignature (_ : xs) readyArray = toSignature xs readyArray
+
+parseSignature ((VariableToken varName) : Nil) = Just (VariableSignature [ varName ])
+
+parseSignature ((MacroToken macroName) : Nil) = Just (MacroSignature macroName)
+
 parseSignature _ = Nothing
+
+
+
+data IndentationCommand = IndentationChange Int
+data SplitControlCommand = StopSplitting | ContinueSplitting | Cut
+-- | splits a part of arbitrary list into array of lists based on indentation controlling and split controllng functions
+indentationBasedSplitting :: forall a. List a -> (a -> IndentationCommand) -> (a -> SplitControlCommand) -> Maybe {splitPart::(Array (List a)), unreadPart:: (List a)}
+indentationBasedSplitting list indentationCommand splitControlCommand = toRightFormat $ process Nil [] list indentationCommand splitControlCommand 
+  where
+    toRightFormat = identity
+    process curpart previousParts Nil indentationCommand splitControlCommand =Nothing -- TODO
+    
