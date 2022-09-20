@@ -1,1 +1,3 @@
-[(LeafExpression "womanshemanhe"),(LeafExpression "manhewomanshe")]
+(Just { otherLines: Nil, statement: (AssigmentStatement (Assigment 
+(VariableSignature ["macro","var","really"]) 
+(Expression (TupleOf [(Expression (VariableCall "a") []),(Expression (TupleOf [(Expression (MacroCall "c") [])]) [])]) []))) })

@@ -18,13 +18,15 @@ naturalTokenSpliters :: Array Char
 naturalTokenSpliters = [ '\n', ' ', '\t' ]
 
 allTokenSplitters :: Array Char
-allTokenSplitters = naturalTokenSpliters <> [ '[', ']', ',', '|', '+', '!', '=' ]
+allTokenSplitters = naturalTokenSpliters <> [ '[', ']', ',', '|', '+', '!', '=','(',')' ]
 
 extractOneToken :: List Char -> Maybe { extractedToken :: Token, otherChars :: List Char }
 extractOneToken chars = case chars of
   Nil -> Nothing -- Nothing is the correct behaviour: no tokens were found
   '[' : xs -> finish TupleOpenedToken xs
   ']' : xs -> finish TupleClosedToken xs
+  '(' : xs -> finish BraceOpenedToken xs
+  ')' : xs -> finish BraceClosedToken xs
   ',' : xs -> finish TupleNextItemToken xs
   '|' : xs -> finish OneOfToken xs
   '+' : xs -> finish ConsolidationOfToken xs

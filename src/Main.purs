@@ -4,18 +4,21 @@ import Prelude
 
 import Assertions (applyAssertions)
 import Data.Either (Either(..))
-import Data.List.Lazy (Step(..), step)
+import Data.List (List(..), (:))
+import Data.List as L
 import Data.Map (empty, fromFoldable)
 import Data.String (joinWith)
+import Data.String.CodeUnits (toCharArray)
 import Data.Tuple (Tuple(..))
 import Data.Validation.Semigroup (V(..))
 import Effect (Effect)
 import Effect.Aff (launchAff_)
-import Evaluate ( tryEvaluateExpression, tryEvaluateExpressionForAllVariables)
+import Evaluate (tryEvaluateExpression, tryEvaluateExpressionForAllVariables)
 import Format (format)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile, writeTextFile)
-import Parse (parse)
+import Parse (extractOneStatement, parse, tokensToStatement)
+import Tokenization (tokenize)
 import Types (Assertion(..), AssertionType(..), DeterministicEvaluatedExpression(..), Expression(..), ExpressionType(..), evaluatedExpressionToArray, nonDeterministicVariableDeclaration)
 
 main :: Effect Unit
@@ -85,4 +88,5 @@ main =
                       )
                       [ "person", "pronoun", "person2", "pronoun2" , "city2"]
                   )
-        writeTextFile UTF8 "out.txt" textToOutput
+        let funcChain = tokenize <<< L.fromFoldable <<< toCharArray 
+        writeTextFile UTF8 "out.txt" (show $ extractOneStatement ("[$macro,$var,$really]=[$a,[#c]]":Nil))

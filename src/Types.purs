@@ -1,6 +1,7 @@
 module Types where
 
 import Prelude
+
 import Data.Array (head, zip)
 import Data.Generic.Rep (class Generic)
 import Data.List (List)
@@ -130,3 +131,37 @@ data Token
   | AssigmentToken -- `=`
 
 derive instance eqToken :: Eq Token
+derive instance genericToken :: Generic Token _
+instance showToken :: Show Token where
+  show t = genericShow t
+
+
+derive instance genericAssertion :: Generic Assertion _
+instance showAssertion :: Show Assertion where
+  show t = genericShow t
+
+
+derive instance genericSignature :: Generic Signature _
+instance showSignature :: Show Signature where
+  show t = genericShow t
+
+derive instance genericAssigment :: Generic Assigment _
+instance showAssigment :: Show Assigment where
+  show t = genericShow t
+
+derive instance genericExpression :: Generic Expression _
+instance showExpression :: Show Expression where
+  show t = genericShow t
+
+derive instance genericExpressionType :: Generic ExpressionType _
+instance showExpressionType :: Show ExpressionType where
+  show t = genericShow t
+
+derive instance genericAssertionType :: Generic AssertionType _
+instance showAssertionType :: Show AssertionType where
+  show t = genericShow t
+
+derive instance genericStatement :: Generic Statement _
+instance showStatement :: Show Statement where
+  show t = genericShow t
+

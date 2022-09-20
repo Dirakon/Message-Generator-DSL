@@ -2,23 +2,21 @@ module Parse where
 
 import Prelude
 
-import Data.Array (elem, fromFoldable, length, toUnfoldable)
-import Data.Array.NonEmpty (NonEmptyArray, toArray)
-import Data.List (List(..), (:))
-import Data.List (List(..), filter)
+import Data.Array (fromFoldable, length, toUnfoldable)
+import Data.Array.NonEmpty (toArray)
+import Data.List (filter, (:))
 import Data.List.Types (List(..))
-import Data.Map (empty)
 import Data.Maybe (Maybe(..))
-import Data.String (contains, joinWith, trim)
-import Data.String.CodeUnits (fromCharArray, slice, toCharArray)
-import Data.String.Regex (Regex, match, replace)
-import Data.String.Regex (Regex, split)
+import Data.String (joinWith, trim)
+import Data.String.CodeUnits (toCharArray)
+import Data.String.Regex (Regex, match, replace, split)
 import Data.String.Regex.Flags (noFlags)
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (startsWith)
-import Regex (assertionOperationRegex, doubleQuoteBodyGlobal)
-import Tokenization (readUntilFirstOccurance, readUntilFirstOccuranceWithState, tokenize)
-import Types (Assertion(..), AssertionType(..), Assigment(..), BotState, Expression(..), ExpressionType(..), Signature(..), Statement(..), Token(..))
+import Data.Traversable (sequence)
+import Regex (doubleQuoteBodyGlobal)
+import Tokenization (readUntilFirstOccurance, tokenize)
+import Types (Assertion(..), AssertionType(..), Assigment(..), Expression(..), ExpressionType(..), Signature(..), Statement(..), Token(..))
 
 match' :: Regex -> String -> Array (Maybe String)
 match' regex string = case match regex string of
@@ -26,13 +24,16 @@ match' regex string = case match regex string of
   Just arr -> toArray arr
 
 -- TODO: Different return
-parse :: String -> BotState
-parse code =
-  { assertions: []
-  , macros: empty
-  , variableConstructors: empty
-  , variables: empty
-  }
+parse :: String -> Boolean
+parse code = true
+  where
+  statements = map instantiateActors actorlessStatements
+  actorlessStatements = ((split (unsafeRegex "\n" noFlags)) >>> toUnfoldable >>> extractAllStatements) code
+
+extractAllStatements :: List String -> List Statement
+extractAllStatements lines = case extractOneStatement lines of
+  Nothing -> Nil
+  Just {statement, otherLines} -> statement : extractAllStatements otherLines
 
 hasPatternOutsideQuotes :: String -> Regex -> Boolean
 hasPatternOutsideQuotes text regex = 0 /= (length $ match' regex text)
@@ -99,23 +100,16 @@ splitByToken tokens tokenSplitter = map toRightFormat $ readUntilFirstOccurance 
     | otherwise = Nothing
 
 parseAssertion :: { preAssertion :: List Token, postAssertion :: List Token, assertionType :: AssertionType } -> Maybe Assertion
-parseAssertion { preAssertion, postAssertion, assertionType } = ado
-  expr1 <- parseExpression Nothing preAssertion
-  expr2 <- parseExpression Nothing postAssertion
-  in (Assertion assertionType expr1 expr2)
+parseAssertion { preAssertion, postAssertion, assertionType } = do
+  { extractedExpression: expr1 } <- extractOneExpression preAssertion
+  { extractedExpression: expr2 } <- extractOneExpression postAssertion
+  pure (Assertion assertionType expr1 expr2)
 
 parseAssigment :: { preAssigment :: List Token, postAssigment :: List Token } -> Maybe Assigment
 parseAssigment { preAssigment, postAssigment } = ado
   signature <- parseSignature preAssigment
-  expr <- parseExpression Nothing postAssigment
+  { extractedExpression: expr } <- extractOneExpression postAssigment
   in (Assigment signature expr)
-
-parseExpression :: Maybe Expression -> List Token -> Maybe Expression
-parseExpression _ (TupleOpenedToken : xs) = Nothing -- TODO
-
-parseExpression (Just operand1) (OneOfToken : xs) = Nothing
-
-parseExpression _ _ = Nothing
 
 -- TODO: add ALL actors post-factum (impossible to do with current arguments in the process)
 extractOneExpression :: List Token -> Maybe { extractedExpression :: Expression, otherTokens :: List Token }
@@ -123,7 +117,7 @@ extractOneExpression ((LiteralToken literalValue) : otherTokens) = tryFindBinary
   where
   constructedLiteral = Expression (Literal literalValue) []
 
-extractOneExpression ((VariableToken variableName) : otherTokens) =  tryFindBinaryExpression constructedVarialeCall otherTokens
+extractOneExpression ((VariableToken variableName) : otherTokens) = tryFindBinaryExpression constructedVarialeCall otherTokens
   where
   constructedVarialeCall = Expression (VariableCall variableName) []
 
@@ -131,22 +125,54 @@ extractOneExpression ((MacroToken macroName) : otherTokens) = tryFindBinaryExpre
   where
   constructedMacroCall = Expression (MacroCall macroName) []
 
-extractOneExpression (TupleOpenedToken : otherTokens) = process otherTokens []
+extractOneExpression (TupleOpenedToken : otherTokens) = case maybeConstructedTuple of
+  Nothing -> Nothing
+  Just { otherTokens, extractedExpression } -> tryFindBinaryExpression extractedExpression otherTokens
   where
-  process :: List Token -> Array Expression -> Maybe { extractedExpression :: Expression, otherTokens :: List Token }
-  process (TupleClosedToken : otherTokens) alreadyExtractedOnes = Just { extractedExpression, otherTokens }
-    where
-    extractedExpression = Expression (TupleOf alreadyExtractedOnes) []
+  maybeConstructedTuple = case indentationBasedSplitting otherTokens indentationFunc of
+    Nothing -> Nothing
+    Just { splitPart, unreadPart } -> map (toRightFormat unreadPart) (parseSubExpressions splitPart)
 
-  process (TupleNextItemToken : otherTokens) alreadyExtractedOnes = process otherTokens alreadyExtractedOnes
+  indentationFunc 0 TupleClosedToken = { controlCommand: StopSplitting, indentationChange: 0 }
 
-  process Nil _ = Nothing -- TODO: tuple not closed error
+  indentationFunc _ TupleClosedToken = { controlCommand: ContinueSplitting, indentationChange: -1 }
 
-  process something alreadyExtractedOnes = Nothing --TODO! ado
+  indentationFunc _ TupleOpenedToken = { controlCommand: ContinueSplitting, indentationChange: 1 }
 
--- map toRightFormat $ extractOneExpression something
--- where
--- toRightFormat { extractedExpression, otherTokens } = process otherTokens ([ extractedExpression ] <> alreadyExtractedOnes)
+  indentationFunc 0 TupleNextItemToken = { controlCommand: CommenseSplitting, indentationChange: 0 }
+
+  indentationFunc _ _ = { controlCommand: ContinueSplitting, indentationChange: 0 }
+
+  parseSubExpressions subExpressions = sequence $ map (\subExpr -> ignoreOthers $ extractOneExpression subExpr) subExpressions
+
+  ignoreOthers = map (\{ extractedExpression } -> extractedExpression)
+
+  toRightFormat otherTokens subExpressions = { otherTokens, extractedExpression: Expression (TupleOf subExpressions) [] }
+
+extractOneExpression (BraceOpenedToken : otherTokens) = case maybeConstructedBraces of
+  Nothing -> Nothing
+  Just { otherTokens, extractedExpression } -> tryFindBinaryExpression extractedExpression otherTokens
+  where
+  maybeConstructedBraces = case indentationBasedSplitting otherTokens indentationFunc of
+    Nothing -> Nothing
+    Just { splitPart, unreadPart } -> map (toRightFormat unreadPart) (parseSubExpression splitPart)
+
+  indentationFunc 0 BraceClosedToken = { controlCommand: StopSplitting, indentationChange: 0 }
+
+  indentationFunc _ BraceClosedToken = { controlCommand: ContinueSplitting, indentationChange: -1 }
+
+  indentationFunc _ BraceOpenedToken = { controlCommand: ContinueSplitting, indentationChange: 1 }
+
+  indentationFunc _ _ = { controlCommand: ContinueSplitting, indentationChange: 0 }
+
+  parseSubExpression [ subExpression ] = ignoreOthers $ extractOneExpression subExpression
+
+  parseSubExpression _ = Nothing -- TODO: error, should not happen, means that indentationBasedSplitting is broken
+
+  ignoreOthers = map (\{ extractedExpression } -> extractedExpression)
+
+  toRightFormat otherTokens subExpression = { otherTokens, extractedExpression: subExpression }
+
 extractOneExpression Nil = Nothing
 
 extractOneExpression _ = Nothing -- TODO: error, unexpected token
@@ -181,14 +207,43 @@ parseSignature ((MacroToken macroName) : Nil) = Just (MacroSignature macroName)
 
 parseSignature _ = Nothing
 
+type IndentationSplittingControl
+  = { indentationChange :: Int
+    , controlCommand :: SplitControlCommand
+    }
 
+data SplitControlCommand
+  = StopSplitting
+  | ContinueSplitting
+  | CommenseSplitting
 
-data IndentationCommand = IndentationChange Int
-data SplitControlCommand = StopSplitting | ContinueSplitting | Cut
 -- | splits a part of arbitrary list into array of lists based on indentation controlling and split controllng functions
-indentationBasedSplitting :: forall a. List a -> (a -> IndentationCommand) -> (a -> SplitControlCommand) -> Maybe {splitPart::(Array (List a)), unreadPart:: (List a)}
-indentationBasedSplitting list indentationCommand splitControlCommand = toRightFormat $ process Nil [] list indentationCommand splitControlCommand 
+indentationBasedSplitting :: forall a. List a -> (Int -> a -> IndentationSplittingControl) -> Maybe { splitPart :: (Array (List a)), unreadPart :: (List a) }
+indentationBasedSplitting list controlCommand = process Nil [] list 0
   where
-    toRightFormat = identity
-    process curpart previousParts Nil indentationCommand splitControlCommand =Nothing -- TODO
-    
+  toRightFormat splitPart unreadPart = { splitPart, unreadPart }
+
+  finallizeCurrentItem Nil arr = arr
+
+  finallizeCurrentItem smth arr = arr <> [ smth ]
+
+  process _ _ Nil _ = Nothing -- TODO Error, end of list reached, split is not stopped
+
+  process partiallyAssembledPart assembledParts (el : xs) n = case controlCommand n el of
+    { controlCommand: StopSplitting } -> Just $ toRightFormat (finallizeCurrentItem partiallyAssembledPart assembledParts) xs
+    { indentationChange, controlCommand: ContinueSplitting } -> process (partiallyAssembledPart <> el : Nil) assembledParts xs (n + indentationChange)
+    { indentationChange, controlCommand: CommenseSplitting } -> process Nil (finallizeCurrentItem partiallyAssembledPart assembledParts) xs (n + indentationChange)
+
+
+instantiateActors :: Statement -> Statement
+instantiateActors (AssigmentStatement (Assigment sign expr)) = AssigmentStatement (Assigment sign expr')
+  where
+  expr' = instantiateActorsInExpression expr
+instantiateActors (AssertionStatement (Assertion asType expr1 expr2)) = (AssertionStatement (Assertion asType expr1' expr2'))
+  where
+  expr1' = instantiateActorsInExpression expr1
+  expr2' = instantiateActorsInExpression expr2
+
+instantiateActorsInExpression :: Expression -> Expression
+instantiateActorsInExpression expr = expr -- TODO
+instantiateActorsInExpression expr@(Expression (Literal _) _) = expr
