@@ -18,7 +18,7 @@ naturalTokenSpliters :: Array Char
 naturalTokenSpliters = [ '\n', ' ', '\t' ]
 
 allTokenSplitters :: Array Char
-allTokenSplitters = naturalTokenSpliters <> [ '[', ']', ',', '|', '+', '!', '=','(',')' ]
+allTokenSplitters = naturalTokenSpliters <> [ '[', ']', ',', '|', '+', '!', '=','(',')' ] 
 
 extractOneToken :: List Char -> Maybe { extractedToken :: Token, otherChars :: List Char }
 extractOneToken chars = case chars of

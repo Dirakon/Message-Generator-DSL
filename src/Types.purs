@@ -164,4 +164,3 @@ instance showAssertionType :: Show AssertionType where
 derive instance genericStatement :: Generic Statement _
 instance showStatement :: Show Statement where
   show t = genericShow t
-
