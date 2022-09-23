@@ -1,3 +1,1 @@
-(Just { otherLines: Nil, statement: (AssigmentStatement (Assigment 
-(VariableSignature ["macro","var","really"]) 
-(Expression (TupleOf [(Expression (VariableCall "a") []),(Expression (TupleOf [(Expression (MacroCall "c") [])]) [])]) []))) })
+((AssigmentStatement (Assigment (VariableSignature ["var","var","really"]) (Expression (TupleOf [(Expression (MacroCall "c") ["a","c"])]) ["a","c"]))) : (AssigmentStatement (Assigment (MacroSignature "c") (Expression (ConsolidationOf (Expression (VariableCall "a") ["a"]) (Expression (OneOf (Expression (VariableCall "a") ["a"]) (Expression (VariableCall "a") ["a"])) ["a"])) ["a"]))) : (AssigmentStatement (Assigment (VariableSignature ["a"]) (Expression (Literal "vasya") []))) : Nil)

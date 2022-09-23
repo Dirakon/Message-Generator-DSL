@@ -3,21 +3,24 @@ module Main where
 import Prelude
 
 import Assertions (applyAssertions)
+import Data.Array (concatMap)
 import Data.Either (Either(..))
 import Data.List (List(..), (:))
 import Data.List as L
-import Data.Map (empty, fromFoldable)
+import Data.Map (empty, fromFoldable, lookup)
+import Data.Maybe (Maybe(..))
 import Data.String (joinWith)
 import Data.String.CodeUnits (toCharArray)
 import Data.Tuple (Tuple(..))
 import Data.Validation.Semigroup (V(..))
+import Debug (trace)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Evaluate (tryEvaluateExpression, tryEvaluateExpressionForAllVariables)
 import Format (format)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile, writeTextFile)
-import Parse (extractOneStatement, parse, tokensToStatement)
+import Parse (extractOneStatement, instantiateAllActors, instantiateLiteralActorsInStatement, parse, recursivelyReplaceActors, tokensToStatement, unsafeJust)
 import Tokenization (tokenize)
 import Types (Assertion(..), AssertionType(..), DeterministicEvaluatedExpression(..), Expression(..), ExpressionType(..), evaluatedExpressionToArray, nonDeterministicVariableDeclaration)
 
@@ -88,5 +91,6 @@ main =
                       )
                       [ "person", "pronoun", "person2", "pronoun2" , "city2"]
                   )
-        let funcChain = tokenize <<< L.fromFoldable <<< toCharArray 
-        writeTextFile UTF8 "out.txt" (show $ extractOneStatement ("[$macro,$var,$really]=[$a,[#c]]":Nil))
+        let statements' = extractOneStatement ("[$var,$var,$really]=[#c]":Nil) : extractOneStatement ("#c=$a + $a | $a":Nil) : extractOneStatement ("$a=\"vasya\"":Nil): Nil
+        let statements = ((map (\{statement} -> statement)) <<< (map unsafeJust)) statements'
+        writeTextFile UTF8 "out.txt" (show $ instantiateAllActors statements)
