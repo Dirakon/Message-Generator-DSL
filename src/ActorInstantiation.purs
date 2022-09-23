@@ -93,7 +93,7 @@ instantiateAllActorsInAssigments uninstantiatedAssigments instantiatedAssigments
   instantiatedAssigments' = newInstantiatedAssigments <> instantiatedAssigments
 
   getReplacements :: Assigment -> List (Tuple String (Array String))
-  getReplacements (Assigment (MacroSignature macroName) (Expression _ actorList)) = (Tuple (macroActorPrefix <> macroName) (actorList <> [macroName])) : Nil
+  getReplacements (Assigment (MacroSignature macroName) (Expression _ actorList)) = (Tuple (macroActorPrefix <> macroName) (actorList)) : Nil
   
   getReplacements (Assigment (VariableSignature varNames) (Expression _ actorList)) =
     L.fromFoldable

@@ -113,11 +113,3 @@ consolidateEvaluatedExpressions expr1 expr2 = consolidateEvaluatedExpressions ex
   expr1' = (TreeExpression (evaluatedExpressionToArray expr1))
 
   expr2' = (TreeExpression (evaluatedExpressionToArray expr2))
-
-unifyVariableDeclarations :: NonDeterministicVariableDeclaration -> NonDeterministicVariableDeclaration -> NonDeterministicVariableDeclaration
-unifyVariableDeclarations deterministicDecs1 deterministicDecs2 = unifiedDecs
-  where
-  unifiedDecs = do
-    values1 <- deterministicDecs1
-    values2 <- deterministicDecs2
-    pure $ unionWith (\obj1 obj2 -> obj1) values1 values2

@@ -2,16 +2,18 @@ module Assertions where
 
 import Prelude
 import Types
-import Data.Array (cons, filter, filterA, find, foldM, foldMap, foldl, head, index, partition, uncons)
+
+import Data.Array (cons, filter, filterA, find, foldM, foldMap, head, index, partition, uncons)
 import Data.Either (Either(..))
-import Data.List (any, List)
+import Data.List (List, any, foldl)
+import Data.Map (unionWith)
 import Data.Map as Map
 import Data.Map.Internal (keys)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Set (Set)
 import Data.Traversable (sequence, traverse)
 import Data.Validation.Semigroup (V(..), invalid)
-import Evaluate (tryEvaluateExpression, unifyVariableDeclarations)
+import Evaluate (tryEvaluateExpression)
 
 -- -- | Check every assertion with 'assertionHolds', accumulate erros if there are any.
 -- assertionsHold :: BotState -> V Errors Boolean
@@ -25,7 +27,8 @@ applyAssertions :: Array Assertion -> MacroList -> NonDeterministicVariableList 
 applyAssertions assertions macros variables = foldl (applySingleAssertion macros) variables assertions
 
 applySingleAssertion :: MacroList -> NonDeterministicVariableList -> Assertion -> NonDeterministicVariableList
-applySingleAssertion macros variables (Assertion assertionType expr1@(Expression _ actors1) expr2@(Expression _ actors2)) = [ assertedUnifiedRelevantVarDecs ] <> otherVarDecs
+applySingleAssertion macros variables (Assertion assertionType expr1@(Expression _ actors1) expr2@(Expression _ actors2)) = 
+  [ assertedUnifiedRelevantVarDecs ] <> otherVarDecs
   where
   allActors = actors1 <> actors2
 
@@ -42,13 +45,8 @@ applySingleAssertion macros variables (Assertion assertionType expr1@(Expression
           _ -> true
       )
 
-  { yes: relevantVarDecs, no: otherVarDecs } = partition variablesAreRelevant variables
-
-  unifiedRelevantVarDecs = case uncons relevantVarDecs of
-    Nothing -> []
-    Just { head: initialState, tail: otherRelevantVarDecs } -> foldl unifyVariableDeclarations initialState otherRelevantVarDecs
-
-  assertedUnifiedRelevantVarDecs = filter assertionIsTrue unifiedRelevantVarDecs
+  {unifiedDeclarations,otherVarDecs} = unifyVariableDeclarationsOnCondition variables variablesAreRelevant
+  assertedUnifiedRelevantVarDecs = filter assertionIsTrue unifiedDeclarations
 
   -- TODO: add error on non-deterministic expression comparison
   assertionIsTrue determinedVariables =
@@ -64,3 +62,24 @@ compareEvaluatedExpressions :: AssertionType -> DeterministicEvaluatedExpression
 compareEvaluatedExpressions ExpressionsEqual a b = a == b
 
 compareEvaluatedExpressions ExpressionsDifferent a b = a /= b
+
+
+unifyVariableDeclarationsOnCondition :: Array NonDeterministicVariableDeclaration -> (NonDeterministicVariableDeclaration -> Boolean) 
+  -> {unifiedDeclarations::NonDeterministicVariableDeclaration,otherVarDecs::Array NonDeterministicVariableDeclaration}
+unifyVariableDeclarationsOnCondition varDecs condition = {unifiedDeclarations, otherVarDecs}
+  where
+    
+  { yes: relevantVarDecs, no: otherVarDecs } = partition condition varDecs
+
+  unifiedDeclarations = case uncons relevantVarDecs of
+    Nothing -> []
+    Just { head: initialState, tail: otherRelevantVarDecs } -> foldl unifyTwoVariableDeclarations initialState otherRelevantVarDecs
+
+
+unifyTwoVariableDeclarations :: NonDeterministicVariableDeclaration -> NonDeterministicVariableDeclaration -> NonDeterministicVariableDeclaration
+unifyTwoVariableDeclarations deterministicDecs1 deterministicDecs2 = unifiedDecs
+  where
+  unifiedDecs = do
+    values1 <- deterministicDecs1
+    values2 <- deterministicDecs2
+    pure $ unionWith (\obj1 obj2 -> obj1) values1 values2

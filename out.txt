@@ -1,1 +1,4 @@
-((AssigmentStatement (Assigment (VariableSignature ["var","var","really"]) (Expression (TupleOf [(Expression (MacroCall "c") ["a","c"])]) ["a","c"]))) : (AssigmentStatement (Assigment (MacroSignature "c") (Expression (ConsolidationOf (Expression (VariableCall "a") ["a"]) (Expression (OneOf (Expression (VariableCall "a") ["a"]) (Expression (VariableCall "a") ["a"])) ["a"])) ["a"]))) : (AssigmentStatement (Assigment (VariableSignature ["a"]) (Expression (Literal "vasya") []))) : Nil)
+[[(fromFoldable [(Tuple "a" (LeafExpression "vasya")),
+(Tuple "varya" (LeafExpression "hehe"))]),
+(fromFoldable [(Tuple "a" (LeafExpression "vasya1337s")),(Tuple "varya" (LeafExpression "vasya1337s"))]),
+(fromFoldable [(Tuple "a" (LeafExpression "vasya1337s")),(Tuple "varya" (LeafExpression "hehe"))])]]

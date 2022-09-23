@@ -2,6 +2,7 @@ module Main where
 
 import Prelude
 
+import ActorInstantiation (instantiateAllActors, unsafeJust)
 import Assertions (applyAssertions)
 import Data.Array (concatMap)
 import Data.Either (Either(..))
@@ -20,9 +21,10 @@ import Evaluate (tryEvaluateExpression, tryEvaluateExpressionForAllVariables)
 import Format (format)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile, writeTextFile)
-import Parse (extractOneStatement, instantiateAllActors, instantiateLiteralActorsInStatement, parse, recursivelyReplaceActors, tokensToStatement, unsafeJust)
+import Parse (extractOneStatement, parse, tokensToStatement)
 import Tokenization (tokenize)
 import Types (Assertion(..), AssertionType(..), DeterministicEvaluatedExpression(..), Expression(..), ExpressionType(..), evaluatedExpressionToArray, nonDeterministicVariableDeclaration)
+import VariableInstantiation (instantiateVariables)
 
 main :: Effect Unit
 main =
@@ -91,6 +93,6 @@ main =
                       )
                       [ "person", "pronoun", "person2", "pronoun2" , "city2"]
                   )
-        let statements' = extractOneStatement ("[$var,$var,$really]=[#c]":Nil) : extractOneStatement ("#c=$a + $a | $a":Nil) : extractOneStatement ("$a=\"vasya\"":Nil): Nil
+        let statements' = extractOneStatement ("[$varya]=[#c]":Nil)  : extractOneStatement ("$varya != \"vasya\"":Nil): extractOneStatement ("#c=$a | \"hehe\"":Nil) : extractOneStatement ("$a=\"vasya\"|\"vasya1337s\"":Nil): Nil
         let statements = ((map (\{statement} -> statement)) <<< (map unsafeJust)) statements'
-        writeTextFile UTF8 "out.txt" (show $ instantiateAllActors statements)
+        writeTextFile UTF8 "out.txt" (show $ instantiateVariables $ instantiateAllActors statements)
