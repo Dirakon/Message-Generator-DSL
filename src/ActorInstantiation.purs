@@ -1,4 +1,7 @@
-module ActorInstantiation where
+module ActorInstantiation
+  ( instantiateAllActors
+  )
+  where
 
 import Prelude
 
@@ -23,6 +26,7 @@ import Partial.Unsafe (unsafePartial)
 import Regex (doubleQuoteBodyGlobal)
 import Tokenization (readUntilFirstOccurance, tokenize)
 import Types (ActorList, Assertion(..), AssertionType(..), Assigment(..), Expression(..), ExpressionType(..), Signature(..), Statement(..), Token(..))
+import Utils (extractAssertions, extractAssigments, unsafeJust)
 
 variableActorPrefix ∷ String
 variableActorPrefix = "!"
@@ -36,32 +40,16 @@ instantiateAllActors initialStatements = instantiatedStatements
   statementsWithLiteralActors = map (instantiateLiteralActorsInStatement) initialStatements
 
   allAssigments =
-    mapMaybe
-      ( case _ of
-          AssigmentStatement assigment -> Just assigment
-          _ -> Nothing
-      )
-      statementsWithLiteralActors
+    extractAssigments statementsWithLiteralActors
 
   allAssertions =
-    mapMaybe
-      ( case _ of
-          AssertionStatement assertion -> Just assertion
-          _ -> Nothing
-      )
-      statementsWithLiteralActors
+    extractAssertions statementsWithLiteralActors
     
   (Tuple instantiatedAssigments replacementTable) = instantiateAllActorsInAssigments allAssigments Nil empty
   instantiatedAssertions = instantiateAllActorsInAssertions allAssertions replacementTable
 
   instantiatedStatements = map (AssertionStatement) instantiatedAssertions <> map (AssigmentStatement) instantiatedAssigments
 
-
-unsafeJust :: forall a. Maybe a -> a
-unsafeJust =
-  unsafePartial
-    $ case _ of
-        Just a -> a
 
 instantiateAllActorsInAssertions :: List Assertion -> Map String (Array String) -> List Assertion
 instantiateAllActorsInAssertions assertions replacementTable = map replaceActors assertions
@@ -104,7 +92,6 @@ instantiateAllActorsInAssigments uninstantiatedAssigments instantiatedAssigments
 
   replacementTable' = unionWith (\obj1 obj2 -> obj1) replacementTable newPartOfReplacementTable
 
---TODO
 instantiateLiteralActorsInStatement :: Statement -> Statement
 instantiateLiteralActorsInStatement (AssigmentStatement (Assigment sign expr)) = AssigmentStatement (Assigment sign expr')
   where

@@ -16,39 +16,21 @@ import Data.Tuple (Tuple(..))
 import Debug (trace)
 import Evaluate (tryEvaluateExpression)
 import Types (Assertion(..), Assigment(..), DeterministicEvaluatedExpression, DeterministicVariableDeclaration, Expression(..), MacroList, MacroName, NonDeterministicVariableDeclaration, Signature(..), Statement(..), VariableName, nonDeterministicVariableDeclaration)
+import Utils (extractAssertions, extractMacros, extractVariableAssigments)
 
 instantiateVariables :: List Statement -> Array NonDeterministicVariableDeclaration
 instantiateVariables statements = instantiateVariablesInternal [] varAssgiments macros assertions
   where
-  varAssgiments =
-    L.mapMaybe
-      ( case _ of
-          (AssigmentStatement (Assigment (VariableSignature varNames) expr)) -> Just $ Tuple varNames expr
-          _ -> Nothing
-      )
-      statements
+  varAssgiments = extractVariableAssigments statements
 
-  macros =
-    M.fromFoldable
-      $ L.mapMaybe
-          ( case _ of
-              (AssigmentStatement (Assigment (MacroSignature macroName) expr)) -> Just $ Tuple macroName expr
-              _ -> Nothing
-          )
-          statements
+  macros = extractMacros statements
 
-  assertions =
-    L.mapMaybe
-      ( case _ of
-          AssertionStatement assertion -> Just assertion
-          _ -> Nothing
-      )
-      statements
+  assertions = extractAssertions statements
 
 instantiateVariablesInternal :: Array NonDeterministicVariableDeclaration -> List (Tuple (Array VariableName) Expression) -> MacroList -> List Assertion -> Array NonDeterministicVariableDeclaration
 instantiateVariablesInternal initiatedVarDecs Nil _ Nil = initiatedVarDecs
 
-instantiateVariablesInternal initiatedVarDecs unprocessedVarAssigments macros unusedAssertions = trace (show uninitiatableAssigments) \_ ->  case initiatableAssigments of
+instantiateVariablesInternal initiatedVarDecs unprocessedVarAssigments macros unusedAssertions =  case initiatableAssigments of
     L.Nil -> initiatedVarDecs
     _ -> instantiateVariablesInternal chipedAwayVarDecs uninitiatableAssigments macros unusedAssertions'
   where

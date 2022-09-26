@@ -3,6 +3,7 @@ module Evaluate where
 import Prelude
 import Types
 import Data.Array (catMaybes, concat, cons, length, nubByEq, zip)
+import Data.Array as A
 import Data.Array.NonEmpty (NonEmptyArray, fromArray, uncons)
 import Data.Either (Either(..))
 import Data.Lazy (Lazy)
@@ -15,12 +16,22 @@ import Data.Tuple.Nested (tuple2)
 import Data.Validation.Semigroup (V(..), invalid)
 import Prim.Boolean (False, True)
 
-evaluateMain :: NonDeterministicVariableList -> MacroList -> NonDeterministicEvaluatedExpression
-evaluateMain vars macros = case lookup "Main" macros of
-  Nothing -> [] --TODO: Error "Cannot find macro 'Main'"
-  Just macroExpression -> tryEvaluateExpressionForAllVariables vars macros macroExpression
+evaluateMain :: { variables :: NonDeterministicVariableList, macros :: MacroList } -> Array String
+evaluateMain { variables, macros } = case lookup "Main" macros of
+  Nothing -> [] -- TODO: Error "Cannot find macro 'Main'"
+  Just macroExpression -> A.mapMaybe toStringFormat $ tryEvaluateExpressionForAllVariables variables macros macroExpression
+  where
+  toStringFormat (LeafExpression a) = Just a
+
+  toStringFormat (TreeExpression [ a ]) = toStringFormat a
+
+  toStringFormat _ = Nothing
 
 tryEvaluateExpressionForAllVariables :: NonDeterministicVariableList -> MacroList -> Expression -> NonDeterministicEvaluatedExpression
+tryEvaluateExpressionForAllVariables [] macros expression =
+  fromMaybe []
+    $ tryEvaluateExpression empty macros expression
+
 tryEvaluateExpressionForAllVariables varDeclarations macros expression =
   nubByEq eq $ concat $ catMaybes
     $ do

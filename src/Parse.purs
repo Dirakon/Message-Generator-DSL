@@ -1,7 +1,6 @@
 module Parse where
 
 import Prelude
-
 import ActorInstantiation (instantiateAllActors)
 import Data.Array (concatMap, fold, fromFoldable, length, nubByEq, toUnfoldable)
 import Data.Array.NonEmpty (toArray)
@@ -23,7 +22,9 @@ import Debug (trace)
 import Partial.Unsafe (unsafePartial)
 import Regex (doubleQuoteBodyGlobal)
 import Tokenization (readUntilFirstOccurance, tokenize)
-import Types (ActorList, Assertion(..), AssertionType(..), Assigment(..), Expression(..), ExpressionType(..), Signature(..), Statement(..), Token(..))
+import Types (ActorList, Assertion(..), AssertionType(..), Assigment(..), Expression(..), ExpressionType(..), NonDeterministicVariableList, Signature(..), Statement(..), Token(..), MacroList)
+import Utils (extractMacros)
+import VariableInstantiation (instantiateVariables)
 
 match' :: Regex -> String -> Array (Maybe String)
 match' regex string = case match regex string of
@@ -31,12 +32,14 @@ match' regex string = case match regex string of
   Just arr -> toArray arr
 
 -- TODO: Different return
-parse :: String -> Boolean
-parse code = true
+parse :: String -> { variables :: NonDeterministicVariableList, macros :: MacroList }
+parse code = { variables, macros }
   where
-  statements = instantiateAllActors actorlessStatements
+  statements = ((split (unsafeRegex "\n" noFlags)) >>> toUnfoldable >>> extractAllStatements >>> instantiateAllActors) code
 
-  actorlessStatements = ((split (unsafeRegex "\n" noFlags)) >>> toUnfoldable >>> extractAllStatements) code
+  variables = instantiateVariables statements
+
+  macros = extractMacros statements
 
 extractAllStatements :: List String -> List Statement
 extractAllStatements lines = case extractOneStatement lines of
@@ -64,7 +67,7 @@ extractOneStatement (line1 : others) = case parsedStatement of
   analyzeLines Nil = { relatedLines: Nil, otherLines: Nil }
 
   analyzeLines (curLine : xs)
-    | startsWith "\t" curLine = { relatedLines: (curLine : relatedLines'), otherLines: otherLines' }
+    | (startsWith " " curLine) || (startsWith "\t" curLine) = { relatedLines: (curLine : relatedLines'), otherLines: otherLines' }
       where
       { relatedLines: relatedLines', otherLines: otherLines' } = analyzeLines xs
     | otherwise = { relatedLines: Nil, otherLines: (curLine : xs) }
