@@ -6,11 +6,17 @@
   "private": false,
   "author": "",
   "license": "MIT",
+  "type": "module",
   "dependencies": {
-    "purty": "^7.0.0"
+    "dotenv": "^16.0.2",
+    "purty": "^7.0.0",
+    "tdl-tdlib-addon": "^1.2.1"
   },
   "devDependencies": {
     "process": "^0.11.10"
+  },
+  "scripts": {
+    "dev":"spago bundle-module --platform=node && node ./src/index.js"
   },
   "alias": {
     "process": false

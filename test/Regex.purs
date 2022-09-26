@@ -10,7 +10,7 @@ import Data.String.Regex (Regex, match, replace)
 import Regex (doubleQuoteBodyGlobal, notPreceededBySlashRegex)
 import Test.Unit (TestF, suite, test)
 import Test.Unit.Assert as Assert
-import Parse (match')
+import Utils (match')
 
 regexTests :: Free TestF Unit
 regexTests =

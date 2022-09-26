@@ -1,6 +1,7 @@
 module Parse where
 
 import Prelude
+
 import ActorInstantiation (instantiateAllActors)
 import Data.Array (concatMap, fold, fromFoldable, length, nubByEq, toUnfoldable)
 import Data.Array.NonEmpty (toArray)
@@ -22,17 +23,12 @@ import Debug (trace)
 import Partial.Unsafe (unsafePartial)
 import Regex (doubleQuoteBodyGlobal)
 import Tokenization (readUntilFirstOccurance, tokenize)
-import Types (ActorList, Assertion(..), AssertionType(..), Assigment(..), Expression(..), ExpressionType(..), NonDeterministicVariableList, Signature(..), Statement(..), Token(..), MacroList)
-import Utils (extractMacros)
+import Types (ActorList, Assertion(..), AssertionType(..), Assigment(..), Expression(..), ExpressionType(..), MacroList, NonDeterministicVariableList, Signature(..), Statement(..), Token(..), VariableName)
+import Utils (extractMacros, match')
 import VariableInstantiation (instantiateVariables)
 
-match' :: Regex -> String -> Array (Maybe String)
-match' regex string = case match regex string of
-  Nothing -> []
-  Just arr -> toArray arr
-
 -- TODO: Different return
-parse :: String -> { variables :: NonDeterministicVariableList, macros :: MacroList }
+parse :: String -> { variables :: NonDeterministicVariableList, macros :: MacroList} -- , soloVariables :: Map VariableName (Array String), literalMap :: Map Int String
 parse code = { variables, macros }
   where
   statements = ((split (unsafeRegex "\n" noFlags)) >>> toUnfoldable >>> extractAllStatements >>> instantiateAllActors) code

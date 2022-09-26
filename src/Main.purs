@@ -42,7 +42,6 @@ main =
         --       res' = case step res of
         --         Nil -> "No message can be generated!"
         --         Cons mes _ -> mes
-            
         let process = (format >>> parse >>> evaluateMain)
         code <- readTextFile UTF8 "in.txt"
-        writeTextFile UTF8 "out.txt" (show $ process code)
+        writeTextFile UTF8 "out.txt" (show $ process code)  --((map \{hello}->hello)>>>show) $ hellos

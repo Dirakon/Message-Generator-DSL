@@ -4,12 +4,14 @@ import Prelude
 import Types
 
 import Data.Array as A
+import Data.Array.NonEmpty (toArray)
 import Data.List (List, (:))
 import Data.List as L
 import Data.Map (Map)
 import Data.Map as M
 import Data.Map.Internal as MI
 import Data.Maybe (Maybe(..))
+import Data.String.Regex (Regex, match)
 import Data.Tuple (Tuple(..))
 import Partial.Unsafe (unsafePartial)
 
@@ -48,6 +50,12 @@ extractMacros statements =
           )
           statements
 
+
+
+match' :: Regex -> String -> Array (Maybe String)
+match' regex string = case match regex string of
+  Nothing -> []
+  Just arr -> toArray arr
 
 
 

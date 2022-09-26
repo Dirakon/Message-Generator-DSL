@@ -1,5 +1,9 @@
+
+# node-specific folders
 /bower_components/
 /node_modules/
+
+# purescript-specific folders/files
 /.pulp-cache/
 /output/
 /generated-docs/
@@ -8,3 +12,15 @@
 /.purs*
 /.psa*
 /.spago
+/index.js
+
+# files/folders with sensetive telegram data
+/_td_database/
+/data/
+/_td_files/
+.env
+
+# telegram-specific library
+/td/
+/td
+td
