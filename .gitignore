@@ -12,7 +12,6 @@
 /.purs*
 /.psa*
 /.spago
-/index.js
 
 # files/folders with sensetive telegram data
 /_td_database/

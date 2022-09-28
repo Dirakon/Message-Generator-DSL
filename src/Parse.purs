@@ -3,12 +3,13 @@ module Parse where
 import Prelude
 
 import ActorInstantiation (instantiateAllActors)
-import Data.Array (concatMap, fold, fromFoldable, length, nubByEq, toUnfoldable)
+import Data.Array as A
 import Data.Array.NonEmpty (toArray)
-import Data.List (all, elem, filter, mapMaybe, (:), partition)
+import Data.List ((:))
 import Data.List as L
 import Data.List.Types (List(..))
-import Data.Map (Map, empty, keys, lookup, unionWith, values)
+import Data.Map (Map)
+import Data.Map as M
 import Data.Map.Internal as MI
 import Data.Maybe (Maybe(..))
 import Data.String (joinWith, trim)
@@ -23,17 +24,17 @@ import Debug (trace)
 import Partial.Unsafe (unsafePartial)
 import Regex (doubleQuoteBodyGlobal)
 import Tokenization (readUntilFirstOccurance, tokenize)
-import Types (ActorList, Assertion(..), AssertionType(..), Assigment(..), Expression(..), ExpressionType(..), MacroList, NonDeterministicVariableList, Signature(..), Statement(..), Token(..), VariableName)
+import Types (ActorList, Assertion(..), AssertionType(..), Assigment(..), CommonMetaData, Expression(..), ExpressionType(..), MacroList, NonDeterministicVariableList, Signature(..), Statement(..), Token(..), VariableName)
 import Utils (extractMacros, match')
 import VariableInstantiation (instantiateVariables)
 
 -- TODO: Different return
-parse :: String -> { variables :: NonDeterministicVariableList, macros :: MacroList} -- , soloVariables :: Map VariableName (Array String), literalMap :: Map Int String
-parse code = { variables, macros }
+parse :: String -> CommonMetaData -- , soloVariables :: Map VariableName (Array String), literalMap :: Map Int String
+parse code = { evaluatedVariables, lazyVariables, macros }
   where
-  statements = ((split (unsafeRegex "\n" noFlags)) >>> toUnfoldable >>> extractAllStatements >>> instantiateAllActors) code
+  statements = ((split (unsafeRegex "\n" noFlags)) >>> A.toUnfoldable >>> extractAllStatements >>> instantiateAllActors) code
 
-  variables = instantiateVariables statements
+  (Tuple evaluatedVariables lazyVariables)= instantiateVariables statements
 
   macros = extractMacros statements
 
@@ -43,7 +44,7 @@ extractAllStatements lines = case extractOneStatement lines of
   Just { statement, otherLines } -> statement : extractAllStatements otherLines
 
 hasPatternOutsideQuotes :: String -> Regex -> Boolean
-hasPatternOutsideQuotes text regex = 0 /= (length $ match' regex text)
+hasPatternOutsideQuotes text regex = 0 /= (A.length $ match' regex text)
 
 removeDoubleQuotes :: String -> String
 removeDoubleQuotes text = replace (doubleQuoteBodyGlobal) "" text
@@ -70,9 +71,9 @@ extractOneStatement (line1 : others) = case parsedStatement of
 
   { relatedLines, otherLines } = analyzeLines others
 
-  statementBody = trim $ joinWith "" (fromFoldable (line1 : relatedLines))
+  statementBody = trim $ joinWith "" (A.fromFoldable (line1 : relatedLines))
 
-  parsedStatement = (tokensToStatement <<< tokenize <<< toUnfoldable <<< toCharArray) statementBody
+  parsedStatement = (tokensToStatement <<< tokenize <<< A.toUnfoldable <<< toCharArray) statementBody
 
 tokensToStatement :: List Token -> Maybe Statement
 tokensToStatement tokens = case assertionAnalysis of
@@ -98,7 +99,7 @@ tokensToStatement tokens = case assertionAnalysis of
 splitByToken :: List Token -> Token -> Maybe { pre :: List Token, post :: List Token }
 splitByToken tokens tokenSplitter = map toRightFormat $ readUntilFirstOccurance tokens tokenSplitterIsMet
   where
-  toRightFormat { readData, unreadData } = { pre: filter (_ /= tokenSplitter) readData, post: unreadData }
+  toRightFormat { readData, unreadData } = { pre: L.filter (_ /= tokenSplitter) readData, post: unreadData }
 
   tokenSplitterIsMet Nil = Nothing
 
@@ -189,8 +190,10 @@ tryFindBinaryExpression expr1 Nil = Just { extractedExpression: expr1, otherToke
 
 tryFindBinaryExpression expr1 (OneOfToken : xs) = ado
   { extractedExpression: expr2, otherTokens } <- extractOneExpression xs
-  in { extractedExpression: Expression (OneOf expr1 expr2) [], otherTokens }
-
+  in { extractedExpression: unifyOneOfs expr2, otherTokens }
+  where
+    unifyOneOfs (Expression (OneOf arr) []) = Expression (OneOf (A.cons expr1 arr)) []
+    unifyOneOfs expr2 = Expression (OneOf [expr1, expr2]) []
 tryFindBinaryExpression expr1 (ConsolidationOfToken : xs) = ado
   { extractedExpression: expr2, otherTokens } <- extractOneExpression xs
   in { extractedExpression: Expression (ConsolidationOf expr1 expr2) [], otherTokens }

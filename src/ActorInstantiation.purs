@@ -105,13 +105,11 @@ instantiateLiteralActorsInStatement (AssertionStatement (Assertion asType expr1 
 
 instantiateLiteralActors :: Expression -> Expression
 instantiateLiteralActors initialExpr@(Expression exprType actors) = case exprType of
-  OneOf expr1 expr2 -> Expression (OneOf expr1' expr2') allActors
+  OneOf exprs -> Expression (OneOf exprs') allActors
     where
-    expr1' = rec expr1
+    exprs' = map rec exprs
 
-    expr2' = rec expr2
-
-    allActors = addActors [ expr1', expr2' ]
+    allActors = addActors exprs'
   ConsolidationOf expr1 expr2 -> Expression (ConsolidationOf expr1' expr2') allActors
     where
     expr1' = rec expr1
@@ -136,13 +134,11 @@ instantiateLiteralActors initialExpr@(Expression exprType actors) = case exprTyp
 
 recursivelyReplaceActors :: (ActorList -> ActorList) -> Expression -> Expression
 recursivelyReplaceActors replaceActors initialExpr@(Expression exprType actors) = case exprType of
-  OneOf expr1 expr2 -> Expression (OneOf expr1' expr2') allActors
+  OneOf exprs -> Expression (OneOf exprs') allActors
     where
-    expr1' = rec expr1
+    exprs' = map rec exprs
 
-    expr2' = rec expr2
-
-    allActors = addActors [ expr1', expr2' ]
+    allActors = addActors exprs'
   ConsolidationOf expr1 expr2 -> Expression (ConsolidationOf expr1' expr2') allActors
     where
     expr1' = rec expr1

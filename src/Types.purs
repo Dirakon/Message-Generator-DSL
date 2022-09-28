@@ -23,9 +23,9 @@ data Expression
   = Expression ExpressionType ActorList
 
 data ExpressionType
-  -- TODO: OneOf (+ConsolidationOf?) are arrayed
-  = OneOf Expression Expression
-  | ConsolidationOf Expression Expression
+  -- TODO: ConsolidationOf is arrayed
+  = ConsolidationOf Expression Expression
+  | OneOf (Array Expression)
   | TupleOf (Array Expression)
   | MacroCall MacroName
   | VariableCall VariableName
@@ -75,13 +75,6 @@ type NonDeterministicVariableList
 type VariableConstructorList
   = Map VariableName VariableConstructor
 
-type BotState
-  = { variables :: DeterministicVariableDeclaration
-    , variableConstructors :: VariableConstructorList
-    , macros :: MacroList
-    , assertions :: Array Assertion
-    }
-
 type DeterministicVariableDeclaration
   = Map VariableName DeterministicEvaluatedExpression
 
@@ -129,6 +122,8 @@ data Token
   | AssertionEqualToken -- `==`
   | AssertionDifferentToken -- `!=`
   | AssigmentToken -- `=`
+
+type CommonMetaData = {lazyVariables :: Map String Expression, macros :: Map MacroName Expression, evaluatedVariables :: NonDeterministicVariableList}
 
 derive instance eqToken :: Eq Token
 derive instance genericToken :: Generic Token _

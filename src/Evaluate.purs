@@ -57,7 +57,9 @@ tryEvaluateExpressionForAllVariables varDeclarations macros expression =
 tryEvaluateExpression :: DeterministicVariableDeclaration -> MacroList -> Expression -> Maybe NonDeterministicEvaluatedExpression
 tryEvaluateExpression vars macros (Expression exprType _) = case exprType of
   Literal lit -> Just $ [ LeafExpression lit ]
-  OneOf expr1 expr2 -> recursiveCall expr1 <> recursiveCall expr2
+  OneOf exprs -> ado
+    possibleValues <- sequence $ map recursiveCall exprs
+    in A.concat possibleValues
   -- TODO: lift errors from consolidation to the function signature (V Errors (Maybe EvaluatedExpression)?)
   ConsolidationOf expr1 expr2 -> case sideEffectedConsolidation of
     (Just (V (Right res))) -> Just res
@@ -101,10 +103,6 @@ tryEvaluateExpression vars macros (Expression exprType _) = case exprType of
   where
   recursiveCall = tryEvaluateExpression vars macros
 
-variableDefined :: VariableName -> BotState -> Boolean
-variableDefined varName state = case lookup varName state.variables of
-  Nothing -> false
-  Just _ -> true
 
 -- TODO: For OneOf: parallelize and combine 
 consolidateEvaluatedExpressions :: DeterministicEvaluatedExpression -> DeterministicEvaluatedExpression -> V Errors DeterministicEvaluatedExpression

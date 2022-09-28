@@ -7,25 +7,38 @@ import Prelude
 import Assertions (applyAssertions, unifyVariableDeclarationsOnCondition)
 import Data.Array as A
 import Data.Foldable (all, any, elem)
-import Data.List (List(..), partition, (:))
+import Data.List (List(..), (:))
 import Data.List as L
+import Data.Map (Map)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Set as S
 import Data.Tuple (Tuple(..))
 import Debug (trace)
 import Evaluate (tryEvaluateExpression)
-import Types (Assertion(..), Assigment(..), DeterministicEvaluatedExpression, DeterministicVariableDeclaration, Expression(..), MacroList, MacroName, NonDeterministicVariableDeclaration, Signature(..), Statement(..), VariableName, nonDeterministicVariableDeclaration)
-import Utils (extractAssertions, extractMacros, extractVariableAssigments)
+import Types (Assertion(..), Assigment(..), DeterministicEvaluatedExpression, DeterministicVariableDeclaration, Expression(..), MacroName, NonDeterministicVariableDeclaration, NonDeterministicVariableList, Signature(..), Statement(..), VariableName, MacroList, nonDeterministicVariableDeclaration)
+import Utils (extractAssertions, extractMacros, extractVariableAssigments, presentInAssertion, unsafeHead)
 
-instantiateVariables :: List Statement -> Array NonDeterministicVariableDeclaration
-instantiateVariables statements = instantiateVariablesInternal [] varAssgiments macros assertions
+instantiateVariables :: List Statement -> Tuple NonDeterministicVariableList (Map String Expression)
+instantiateVariables statements = Tuple  (instantiateVariablesInternal [] unlazyVarAssgiments macros assertions)  lazyVarAssigments'
   where
-  varAssgiments = extractVariableAssigments statements
+  varAssigments = extractVariableAssigments statements
 
   macros = extractMacros statements
 
   assertions = extractAssertions statements
+
+  presentInAssertions varName = any (presentInAssertion varName) assertions
+
+
+  presentInAnyMultivariableAssigment varName = any (\(Tuple variables (Expression _ actors)) -> A.length variables > 1 && varName `elem` actors) varAssigments
+  
+  isVariableLazy (Tuple [oneVar] expr) = not (presentInAssertions oneVar) && not  (presentInAnyMultivariableAssigment oneVar)
+  isVariableLazy _ = false
+
+  {yes:lazyVarAssigments,no: unlazyVarAssgiments} = L.partition isVariableLazy varAssigments
+  lazyVarAssigments' = M.fromFoldable $
+    map (\(Tuple vars expr) -> Tuple (unsafeHead vars) expr) lazyVarAssigments
 
 instantiateVariablesInternal :: Array NonDeterministicVariableDeclaration -> List (Tuple (Array VariableName) Expression) -> MacroList -> List Assertion -> Array NonDeterministicVariableDeclaration
 instantiateVariablesInternal initiatedVarDecs Nil _ Nil = initiatedVarDecs
@@ -42,7 +55,7 @@ instantiateVariablesInternal initiatedVarDecs unprocessedVarAssigments macros un
 
   canInitiate (Tuple varSignature (Expression _ actors)) = A.all (_ `L.elem` initiatedVars) actors
 
-  { yes: initiatableAssigments, no: uninitiatableAssigments } = partition canInitiate unprocessedVarAssigments
+  { yes: initiatableAssigments, no: uninitiatableAssigments } = L.partition canInitiate unprocessedVarAssigments
 
   processNeededVarDecs L.Nil varDecs = varDecs
 
@@ -89,6 +102,6 @@ instantiateVariablesInternal initiatedVarDecs unprocessedVarAssigments macros un
     all varIsInitiated actors1
       && all varIsInitiated actors2
 
-  { yes: completableAssertions, no: unusedAssertions' } = partition isAsserionRelated unusedAssertions
+  { yes: completableAssertions, no: unusedAssertions' } = L.partition isAsserionRelated unusedAssertions
 
   chipedAwayVarDecs = applyAssertions (A.fromFoldable completableAssertions) macros initiatedVarDecs'

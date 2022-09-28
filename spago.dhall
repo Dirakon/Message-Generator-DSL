@@ -20,6 +20,7 @@ You can edit this file as you like.
   , "free"
   , "functions"
   , "lazy"
+  , "lcg"
   , "lists"
   , "maybe"
   , "node-buffer"
