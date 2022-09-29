@@ -12,14 +12,3 @@
 /.purs*
 /.psa*
 /.spago
-
-# files/folders with sensetive telegram data
-/_td_database/
-/data/
-/_td_files/
-.env
-
-# telegram-specific library
-/td/
-/td
-td
