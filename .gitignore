@@ -12,3 +12,6 @@
 /.purs*
 /.psa*
 /.spago
+
+#bundled message generator
+bundledMessageGenerator.js
